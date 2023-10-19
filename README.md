@@ -1,6 +1,8 @@
 # smart-comp-sci
 Examples and numerical tests for SMART scientific computing paper.
 
+To run the code in this repository, it is necessary to install [SMART (Spatial Modeling Algorithms for Reaction and Transport)](https://github.com/RangamaniLabUCSD/smart.git).
+
 Shield: [![CC BY-SA 4.0][cc-by-sa-shield]][cc-by-sa]
 
 This work is licensed under a
