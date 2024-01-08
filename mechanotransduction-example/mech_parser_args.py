@@ -61,6 +61,11 @@ def add_mechanotransduction_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--no-enforce-mass-conservation",
+        action="store_true",
+        default=False,
+    )
 
 
 def add_preprocess_mech_mesh_arguments(parser: argparse.ArgumentParser) -> None:

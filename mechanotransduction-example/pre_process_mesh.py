@@ -88,7 +88,7 @@ def main(mesh_folder: str, shape: Shape, hEdge=0.6, hInnerEdge=0.6):
                         facet_markers.set_value(f.index(), 0)
 
     mesh_folder = Path(mesh_folder)
-    mesh_folder.mkdir(exist_ok=True)
+    mesh_folder.mkdir(exist_ok=True, parents=True)
     mesh_file = mesh_folder / "spreadCell_mesh.h5"
     mesh_tools.write_mesh(cell_mesh, facet_markers, cell_markers, mesh_file)
     # save curvatures for reference
