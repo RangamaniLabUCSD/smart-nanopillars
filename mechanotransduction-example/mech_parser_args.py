@@ -79,3 +79,4 @@ def add_preprocess_mech_mesh_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--hEdge", type=float, default=0.6)
     parser.add_argument("--hInnerEdge", type=float, default=0.6)
+    parser.add_argument("--num-refinements", type=int, default=0)

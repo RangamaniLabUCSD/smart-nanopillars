@@ -67,6 +67,7 @@ def run_pre_preprocess_mech_mesh(
     shape: str,
     hEdge: float,
     hInnerEdge: float,
+    num_refinements: int,
     dry_run: bool,
     **kwargs,
 ):
@@ -79,6 +80,8 @@ def run_pre_preprocess_mech_mesh(
         hEdge,
         "--hInnerEdge",
         hInnerEdge,
+        "--num-refinements",
+        num_refinements,
     ]
 
     script = (

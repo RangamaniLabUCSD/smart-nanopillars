@@ -41,7 +41,33 @@ def shape2theta(shape: Shape) -> str:
         raise ValueError(f"Invalid shape {shape}")
 
 
-def main(mesh_folder: str, shape: Shape, hEdge=0.6, hInnerEdge=0.6):
+def refine(mesh, cell_markers, facet_markers, num_refinements):
+    if num_refinements > 0:
+        print(
+            f"Original mesh has {mesh.num_cells()} cells, "
+            f"{mesh.num_facets()} facets and "
+            f"{mesh.num_vertices()} vertices"
+        )
+        d.parameters["refinement_algorithm"] = "plaza_with_parent_facets"
+        for _ in range(num_refinements):
+            mesh = d.adapt(mesh)
+            cell_markers = d.adapt(cell_markers, mesh)
+            facet_markers = d.adapt(facet_markers, mesh)
+        print(
+            f"Refined mesh has {mesh.num_cells()} cells, "
+            f"{mesh.num_facets()} facets and "
+            f"{mesh.num_vertices()} vertices"
+        )
+    return mesh, cell_markers, facet_markers
+
+
+def main(
+    mesh_folder: str,
+    shape: Shape,
+    hEdge: float = 0.6,
+    hInnerEdge: float = 0.6,
+    num_refinements: int = 0,
+):
     here = Path(__file__).parent.absolute()
     sys.path.append((here / ".." / "utils").as_posix())
 
@@ -59,6 +85,9 @@ def main(mesh_folder: str, shape: Shape, hEdge=0.6, hInnerEdge=0.6):
             half_cell=True,
             return_curvature=True,
         )
+        cell_mesh, cell_markers, facet_markers = refine(
+            cell_mesh, cell_markers, facet_markers, num_refinements
+        )
     else:
         cell_mesh, facet_markers, cell_markers = mesh_gen.create_3dcell(
             outerExpr=outerExpr13,
@@ -67,6 +96,11 @@ def main(mesh_folder: str, shape: Shape, hEdge=0.6, hInnerEdge=0.6):
             hInnerEdge=hInnerEdge,
             thetaExpr=shape2theta(shape),
         )
+
+        cell_mesh, cell_markers, facet_markers = refine(
+            cell_mesh, cell_markers, facet_markers, num_refinements
+        )
+
         # nanopillars=[0.5, 2.0, 2.0])
         for f in d.facets(cell_mesh):
             topology, cellIndices = mesh_tools.facet_topology(f, cell_markers)
