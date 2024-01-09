@@ -41,7 +41,7 @@ def shape2theta(shape: Shape) -> str:
         raise ValueError(f"Invalid shape {shape}")
 
 
-def refine(mesh, cell_markers, facet_markers, num_refinements):
+def refine(mesh, cell_markers, facet_markers, num_refinements, curv_markers=None):
     if num_refinements > 0:
         print(
             f"Original mesh has {mesh.num_cells()} cells, "
@@ -49,16 +49,27 @@ def refine(mesh, cell_markers, facet_markers, num_refinements):
             f"{mesh.num_vertices()} vertices"
         )
         d.parameters["refinement_algorithm"] = "plaza_with_parent_facets"
+        if curv_markers is not None:
+            f_orig = d.Function(d.FunctionSpace(mesh, "CG", 1))
+            f_orig.set_allow_extrapolation(True)
+            f_orig.vector()[:] = curv_markers.array()
         for _ in range(num_refinements):
             mesh = d.adapt(mesh)
             cell_markers = d.adapt(cell_markers, mesh)
             facet_markers = d.adapt(facet_markers, mesh)
+
         print(
             f"Refined mesh has {mesh.num_cells()} cells, "
             f"{mesh.num_facets()} facets and "
             f"{mesh.num_vertices()} vertices"
         )
-    return mesh, cell_markers, facet_markers
+        if curv_markers is not None:
+            adapted_curv_markers = d.MeshFunction("double", mesh, 0)
+            f = d.interpolate(f_orig, d.FunctionSpace(mesh, "CG", 1))
+            adapted_curv_markers.array()[:] = f.vector()[:]
+            return mesh, cell_markers, facet_markers, adapted_curv_markers
+
+    return mesh, cell_markers, facet_markers, curv_markers
 
 
 def main(
@@ -85,8 +96,12 @@ def main(
             half_cell=True,
             return_curvature=True,
         )
-        cell_mesh, cell_markers, facet_markers = refine(
-            cell_mesh, cell_markers, facet_markers, num_refinements
+        cell_mesh, cell_markers, facet_markers, curv_markers = refine(
+            cell_mesh,
+            cell_markers,
+            facet_markers,
+            num_refinements,
+            curv_markers=curv_markers,
         )
     else:
         cell_mesh, facet_markers, cell_markers = mesh_gen.create_3dcell(
@@ -97,7 +112,7 @@ def main(
             thetaExpr=shape2theta(shape),
         )
 
-        cell_mesh, cell_markers, facet_markers = refine(
+        cell_mesh, cell_markers, facet_markers, _ = refine(
             cell_mesh, cell_markers, facet_markers, num_refinements
         )
 
