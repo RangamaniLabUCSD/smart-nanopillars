@@ -104,6 +104,7 @@ def run_mechanotransduction_example(
     e_val: float,
     z_cutoff: float,
     axisymmetric: bool,
+    no_enforce_mass_conservation: bool = False,
     dry_run: bool = False,
     submit_ex3: bool = False,
     **kwargs,
@@ -111,8 +112,6 @@ def run_mechanotransduction_example(
     args = [
         "--mesh-folder",
         Path(mesh_folder).as_posix(),
-        "--outdir",
-        Path(outdir).as_posix(),
         "--time-step",
         time_step,
         "--e-val",
@@ -121,6 +120,12 @@ def run_mechanotransduction_example(
         z_cutoff,
         "--axisymmetric" if axisymmetric else "",
     ]
+    if no_enforce_mass_conservation:
+        args.append("--no-enforce-mass-conservation")
+
+    if not submit_ex3:
+        args.extend(["--outdir", Path(outdir).as_posix()])
+    
 
     script = (
         (here / ".." / "mechanotransduction-example" / "mechanotransduction.py")
