@@ -61,6 +61,111 @@ def add_argument_preprocess_mech_mesh(parser: argparse.ArgumentParser):
 
     mech_parser_args.add_preprocess_mech_mesh_arguments(parser)
 
+def add_argument_mito_example(parser: argparse.ArgumentParser):
+    sys.path.insert(0, (here / ".." / "mito-example").as_posix())
+    import mito_parser_args
+
+    mito_parser_args.add_run_mito_arguments(parser)
+
+
+def add_argument_preprocess_mito_mesh(parser: argparse.ArgumentParser):
+    sys.path.insert(0, (here / ".." / "mito-example").as_posix())
+    import mito_parser_args
+
+    mito_parser_args.add_preprocess_mito_mesh_arguments(parser)
+
+def run_preprocess_mito_mesh(
+    input_mesh_file: Path,
+    output_mesh_file: Path,
+    input_curv_file: Path,
+    output_curv_file: Path,
+    dry_run: bool,
+    num_refinements: int,
+    **kwargs,
+):
+    args = [
+        "--input-mesh-file",
+        Path(input_mesh_file).as_posix(),
+        "--output-mesh-file",
+        Path(output_mesh_file).as_posix(),
+        "--input-curv-file",
+        Path(input_curv_file).as_posix(),
+        "--output-curv-file",
+        Path(output_curv_file).as_posix(),
+        "--num-refinements",
+        num_refinements,
+    ]
+
+    script = (
+        (here / ".." / "mito-example" / "pre_process_mesh.py")
+        .absolute()
+        .resolve()
+        .as_posix()
+    )
+    args = list(map(str, args))
+    if dry_run:
+        print(f"Run command: {sys.executable} {script} {' '.join(args)}")
+        return
+
+    sp.run([sys.executable, script, *args])
+
+
+def run_mito_example(
+    mesh_file: Path,
+    curv_file: Path,
+    outdir: Path,
+    time_step: float,
+    curv_dep: float,
+    enforce_mass_conservation: bool,
+    dry_run: bool = False,
+    submit_ex3: bool = False,
+    **kwargs,
+):
+    args = [
+        "--mesh-file",
+        Path(mesh_file).as_posix(),
+        "--curv-file",
+        Path(curv_file).as_posix(),
+        "--time-step",
+        time_step,
+        "--curv-dep",
+        curv_dep,
+    ]
+    if enforce_mass_conservation:
+        args.append("--enforce-mass-conservation")
+
+    if not submit_ex3:
+        args.extend(["--outdir", Path(outdir).as_posix()])
+
+    script = (
+        (here / ".." / "mito-example" / "mito_atp_dynamics.py")
+        .absolute()
+        .resolve()
+        .as_posix()
+    )
+    # Turn all arguments into strings
+    args = list(map(str, args))
+    args_str = " ".join(args)
+    if dry_run:
+        print(f"Run command: {sys.executable} {script} {args_str}")
+        return
+
+    if submit_ex3:
+        job_file = Path("tmp_job.sbatch")
+        job_file.write_text(
+            ex3_template.format(
+                job_name="mito",
+                python=sys.executable,
+                script=script,
+                args=args_str,
+            )
+        )
+
+        sp.run(["sbatch", job_file])
+        job_file.unlink()
+    else:
+        sp.run([sys.executable, script, *args])
+
 
 def run_pre_preprocess_mech_mesh(
     mesh_folder: Path,
@@ -296,6 +401,17 @@ def main():
     )
     add_argument_mechanotransduction_example(dendritic_spine)
 
+    # Mito example
+    preprocess_spine_mesh = subparsers.add_parser(
+        "preprocess-mito-mesh", help="Preprocess mesh for mito example"
+    )
+    add_argument_preprocess_mito_mesh(preprocess_spine_mesh)
+
+    mito = subparsers.add_parser(
+        "mito", help="Run mito example"
+    )
+    add_argument_mito_example(mito)
+
     args = vars(parser.parse_args())
     # if args[""]
 
@@ -318,6 +434,14 @@ def main():
     elif args["command"] == "mechanotransduction":
         print("Run mechanotransduction example")
         run_mechanotransduction_example(**args)
+    
+    elif args["command"] == "preprocess-mito-mesh":
+        print("Run preprocess mito mesh")
+        run_preprocess_mito_mesh(**args)
+
+    elif args["command"] == "mito":
+        print("Run mito example")
+        run_mito_example(**args)
 
 
 if __name__ == "__main__":
