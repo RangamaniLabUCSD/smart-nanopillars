@@ -209,6 +209,7 @@ def run_mechanotransduction_example(
     e_val: float,
     z_cutoff: float,
     axisymmetric: bool,
+    well_mixed: bool,
     no_enforce_mass_conservation: bool = False,
     dry_run: bool = False,
     submit_ex3: bool = False,
@@ -224,6 +225,7 @@ def run_mechanotransduction_example(
         "--z-cutoff",
         z_cutoff,
         "--axisymmetric" if axisymmetric else "",
+        "--well-mixed" if well_mixed else "",
     ]
     if no_enforce_mass_conservation:
         args.append("--no-enforce-mass-conservation")

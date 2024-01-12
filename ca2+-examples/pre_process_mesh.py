@@ -13,6 +13,11 @@ def main(input_mesh_file, output_mesh_file, num_refinements):
     spine_mesh = d.Mesh(Path(input_mesh_file).as_posix())
     cell_markers = d.MeshFunction("size_t", spine_mesh, 3, spine_mesh.domains())
     facet_markers = d.MeshFunction("size_t", spine_mesh, 2, spine_mesh.domains())
+    int_domain = d.MeshFunction("size_t", spine_mesh, 3)
+    psd_domain = d.MeshFunction("size_t", spine_mesh, 2, spine_mesh.domains())
+    for i in range(len(int_domain.mesh().coordinates())):
+        if int_domain.mesh().coordinates()[i][2] > 0.5:
+            int_domain.array()[i] = 1
 
     if num_refinements > 0:
         print(
@@ -25,21 +30,23 @@ def main(input_mesh_file, output_mesh_file, num_refinements):
             spine_mesh = d.adapt(spine_mesh)
             cell_markers = d.adapt(cell_markers, spine_mesh)
             facet_markers = d.adapt(facet_markers, spine_mesh)
+            psd_domain = d.adapt(psd_domain, spine_mesh)
+            int_domain = d.adapt(int_domain, spine_mesh)
         print(
             f"Refined mesh has {spine_mesh.num_cells()} cells, "
             f"{spine_mesh.num_facets()} facets and "
             f"{spine_mesh.num_vertices()} vertices"
         )
-
-
-    # for i in range(len(facet_array)):
-    #     if (
-    #         facet_array[i] == 11
-    #     ):  # this indicates PSD; in this case, set to 10 to indicate it is a part of the PM
-    #         facet_array[i] = 10
+    
+    facet_array = facet_markers.array()[:]
+    for i in range(len(facet_array)):
+        if (
+            facet_array[i] == 11
+        ):  # this indicates PSD; in this case, set to 10 to indicate it is a part of the PM
+            facet_array[i] = 10
 
     Path(output_mesh_file).parent.mkdir(exist_ok=True, parents=True)
-    mesh_tools.write_mesh(spine_mesh, facet_markers, cell_markers, output_mesh_file)
+    mesh_tools.write_mesh(spine_mesh, facet_markers, cell_markers, output_mesh_file, [psd_domain, int_domain])
 
 
 if __name__ == "__main__":
