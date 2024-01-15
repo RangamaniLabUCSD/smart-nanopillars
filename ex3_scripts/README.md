@@ -1,11 +1,15 @@
 # ex3
 
 
-## Setup environment
-Before submitting any scripts we need to set up the environment on the cluster. First we load the installed modules
+## Setup environment 
+Before submitting any scripts we need to set up the environment on the cluster. First we load the installed modules. On ex3 this would be
 ```
 module use /cm/shared/ex3-modules/202309a/defq/modulefiles
 module load python-fenics-dolfin-2019.2.0.dev0
+```
+On Saga this would be
+```
+source /cluster/shared/fenics/conf/fenics-2019.2.0.dev0.saga.intel-2023a-py3.11.conf
 ```
 Next we create a python virtual environment in the root of the repo. 
 ```
@@ -45,9 +49,9 @@ inside this folder (called `ex3_scripts`)
 Before you can run the mechanotransduction example, you need to create the mesh you want to use. For this you can use the command `preprocess-mech-mesh`, e.g
 
 ```
-python3 main.py preprocess-mech-mesh --shape circle --hEdge 0.6 --hInnerEdge 0.6 --mesh-folder meshes-mechanotransduction/circle_hEdge_0.6
+python3 main.py preprocess-mech-mesh --shape circle --hEdge 0.6 --hInnerEdge 0.6 --num-refinements 1 --mesh-folder meshes-mechanotransduction/circle_hEdge_0.6_refined_1
 ```
-will create a circle mesh with an element size of 0.6 and put it in the folder called `meshes-mechanotransduction/circle_hEdge_0.6`. To see all options you can do
+will create a circle mesh with an element size of 0.6 and with one mesh refinement, and put it in the folder called `meshes-mechanotransduction/circle_hEdge_0.6_refined_1`. To see all options you can do
 
 ```
 python3 main.py preprocess-mech-mesh --help
@@ -56,7 +60,7 @@ python3 main.py preprocess-mech-mesh --help
 #### Running the example locally
 To run the mechanotransduction you should use the command `mechanotransduction`, e.g
 ```
-python3 main.py mechanotransduction --mesh-folder meshes-mechanotransduction/circle_hEdge_0.6 --time-step 0.01 --e-val 70000000 --axisymmetric
+python3 main.py mechanotransduction --mesh-folder meshes-mechanotransduction/circle_hEdge_0.6_refined_1 --time-step 0.01 --e-val 70000000 --axisymmetric
 ```
 To see all options you can again do 
 ```
@@ -66,5 +70,5 @@ python3 main.py mechanotransduction --help
 #### Submitting the example to the cluster
 To submit the example to run on the cluster you also need to pass the flag `submit-ex3`, e.g
 ```
-python3 main.py --submit-ex3 mechanotransduction --mesh-folder meshes-mechanotransduction/circle_hEdge_0.6 --time-step 0.01 --e-val 70000000 --axisymmetric
+python3 main.py --submit-ex3 mechanotransduction --mesh-folder meshes-mechanotransduction/circle_hEdge_0.6_refined_1 --time-step 0.01 --e-val 70000000 --axisymmetric
 ```
