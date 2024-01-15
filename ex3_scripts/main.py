@@ -88,6 +88,7 @@ def add_argument_preprocess_mech_mesh(parser: argparse.ArgumentParser):
 
     mech_parser_args.add_preprocess_mech_mesh_arguments(parser)
 
+
 def add_argument_mito_example(parser: argparse.ArgumentParser):
     sys.path.insert(0, (here / ".." / "mito-example").as_posix())
     import mito_parser_args
@@ -100,6 +101,126 @@ def add_argument_preprocess_mito_mesh(parser: argparse.ArgumentParser):
     import mito_parser_args
 
     mito_parser_args.add_preprocess_mito_mesh_arguments(parser)
+
+
+def add_argument_phosphorylation_example(parser: argparse.ArgumentParser):
+    sys.path.insert(0, (here / ".." / "phosphorylation-example").as_posix())
+    import phosphorylation_parser_args
+
+    phosphorylation_parser_args.add_phosphorylation_arguments(parser)
+
+
+def add_argument_preprocess_phosphorylation_mesh(parser: argparse.ArgumentParser):
+    sys.path.insert(0, (here / ".." / "phosphorylation-example").as_posix())
+    import phosphorylation_parser_args
+
+    phosphorylation_parser_args.add_preprocess_phosphorylation_mesh_arguments(parser)
+
+
+def run_preprocess_phosphorylation_mesh(
+    mesh_folder: Path,
+    curRadius: float,
+    hEdge: float,
+    num_refinements: int,
+    axisymmetric: bool,
+    dry_run: bool,
+    **kwargs,
+):
+    args = [
+        "--mesh-folder",
+        Path(mesh_folder).as_posix(),
+        "--curRadius",
+        curRadius,
+        "--hEdge",
+        hEdge,
+        "--num-refinements",
+        num_refinements,
+    ]
+    if axisymmetric:
+        args.append("--axisymmetric")
+
+    script = (
+        (here / ".." / "phosphorylation-example" / "pre_process_mesh.py")
+        .absolute()
+        .resolve()
+        .as_posix()
+    )
+    args = list(map(str, args))
+    print(f"Run command: {sys.executable} {script} {' '.join(args)}")
+    if dry_run:
+        return
+    sp.run([sys.executable, script, *args])
+
+
+def run_phosphorylation_example(
+    mesh_folder: Path,
+    outdir: Path,
+    time_step: float,
+    curRadius: float,
+    axisymmetric: bool,
+    no_enforce_mass_conservation: bool = False,
+    dry_run: bool = False,
+    submit_ex3: bool = False,
+    submit_saga: bool = False,
+    **kwargs,
+):
+    args = [
+        "--mesh-folder",
+        Path(mesh_folder).as_posix(),
+        "--time-step",
+        time_step,
+        "--curRadius",
+        curRadius,
+    ]
+    if axisymmetric:
+        args.append("--axisymmetric")
+
+    if no_enforce_mass_conservation:
+        args.append("--no-enforce-mass-conservation")
+
+    if submit_ex3 is False and submit_saga is False:
+        args.extend(["--outdir", Path(outdir).as_posix()])
+
+    script = (
+        (here / ".." / "phosphorylation-example" / "phosphorylation.py")
+        .absolute()
+        .resolve()
+        .as_posix()
+    )
+    args = list(map(str, args))
+    args_str = " ".join(args)
+    if dry_run:
+        print(f"Run command: {sys.executable} {script} {args_str}")
+        return
+
+    if submit_ex3:
+        job_file = Path("tmp_job.sbatch")
+        job_file.write_text(
+            ex3_template.format(
+                job_name="phosphorylation",
+                python=sys.executable,
+                script=script,
+                args=args_str,
+            )
+        )
+
+        sp.run(["sbatch", job_file])
+        job_file.unlink()
+    elif submit_saga:
+        job_file = Path("tmp_job.sbatch")
+        job_file.write_text(
+            saga_template.format(
+                job_name="phosphorylation",
+                script=script,
+                args=args_str,
+            )
+        )
+
+        sp.run(["sbatch", job_file])
+        job_file.unlink()
+    else:
+        sp.run([sys.executable, script, *args])
+
 
 def run_preprocess_mito_mesh(
     input_mesh_file: Path,
@@ -252,15 +373,16 @@ def run_mechanotransduction_example(
         e_val,
         "--z-cutoff",
         z_cutoff,
-        "--axisymmetric" if axisymmetric else "",
-        "--well-mixed" if well_mixed else "",
     ]
+    if axisymmetric:
+        args.append("--axisymmetric")
+    if well_mixed:
+        args.append("--well-mixed")
     if no_enforce_mass_conservation:
         args.append("--no-enforce-mass-conservation")
 
     if submit_ex3 is False and submit_saga is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
-    
 
     script = (
         (here / ".." / "mechanotransduction-example" / "mechanotransduction.py")
@@ -463,15 +585,25 @@ def main():
     add_argument_mechanotransduction_example(dendritic_spine)
 
     # Mito example
-    preprocess_spine_mesh = subparsers.add_parser(
+    preprocess_mito_mesh = subparsers.add_parser(
         "preprocess-mito-mesh", help="Preprocess mesh for mito example"
     )
-    add_argument_preprocess_mito_mesh(preprocess_spine_mesh)
+    add_argument_preprocess_mito_mesh(preprocess_mito_mesh)
 
-    mito = subparsers.add_parser(
-        "mito", help="Run mito example"
-    )
+    mito = subparsers.add_parser("mito", help="Run mito example")
     add_argument_mito_example(mito)
+
+    # Phosphorylation example
+    preprocess_phosphorylation_mesh = subparsers.add_parser(
+        "preprocess-phosphorylation-mesh",
+        help="Preprocess mesh for phosphorylation example",
+    )
+    add_argument_preprocess_phosphorylation_mesh(preprocess_phosphorylation_mesh)
+
+    phosphorylation = subparsers.add_parser(
+        "phosphorylation", help="Run phosphorylation example"
+    )
+    add_argument_phosphorylation_example(phosphorylation)
 
     args = vars(parser.parse_args())
     # if args[""]
@@ -495,7 +627,7 @@ def main():
     elif args["command"] == "mechanotransduction":
         print("Run mechanotransduction example")
         run_mechanotransduction_example(**args)
-    
+
     elif args["command"] == "preprocess-mito-mesh":
         print("Run preprocess mito mesh")
         run_preprocess_mito_mesh(**args)
@@ -503,6 +635,13 @@ def main():
     elif args["command"] == "mito":
         print("Run mito example")
         run_mito_example(**args)
+
+    elif args["command"] == "preprocess-phosphorylation-mesh":
+        print("Run preprocess phosphorylation mesh")
+        run_preprocess_phosphorylation_mesh(**args)
+    elif args["command"] == "phosphorylation":
+        print("Run phosphorylation example")
+        run_phosphorylation_example(**args)
 
 
 if __name__ == "__main__":
