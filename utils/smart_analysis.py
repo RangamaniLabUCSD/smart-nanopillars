@@ -13,7 +13,7 @@ from tkinter import messagebox
 root = tk.Tk()
 root.withdraw()
 
-def analyze_all(mesh_file="", results_path="", display=True):
+def analyze_all(mesh_file="", results_path="", display=True, axisymm=False):
     """
     Function for post-processing of XDMF files written from SMART simulations
     Currently relies on loading in the hdf5 file that stores the dolfin mesh
@@ -104,10 +104,15 @@ def analyze_all(mesh_file="", results_path="", display=True):
         num_time_points = len(time_pt_tags)
         dof_map = d.dof_to_vertex_map(Vcur)[:]
         dx_cur = d.Measure("dx", domain=cur_mesh)
-        vol_cur = d.assemble(1.0*dx_cur)
+        if axisymm:
+            x_cur = d.SpatialCoordinate(cur_mesh)[0]
+            vol_cur = d.assemble(x_cur*dx_cur)
+        else:
+            vol_cur = d.assemble(1.0*dx_cur)
+        
         var_avg = []
 
-        for i in range(num_time_points-1):
+        for i in range(num_time_points):
             try:
                 cur_array = cur_file["VisualisationVector"][str(i)][:]
             except:
@@ -117,7 +122,10 @@ def analyze_all(mesh_file="", results_path="", display=True):
             cur_array = cur_array[dof_map]
             dvec.vector().set_local(cur_array)
             dvec.vector().apply("insert")
-            var_avg.append(d.assemble(dvec*dx_cur)/vol_cur)
+            if axisymm:
+                var_avg.append(d.assemble(dvec*x_cur*dx_cur)/vol_cur)
+            else:
+                var_avg.append(d.assemble(dvec*dx_cur)/vol_cur)
             print(f"Done with time step {i} for file {j}")
 
         results_stored.append(var_avg)
