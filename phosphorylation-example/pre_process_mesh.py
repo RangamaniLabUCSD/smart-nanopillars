@@ -5,7 +5,7 @@ import dolfin as d
 import numpy as np
 from smart import mesh_tools
 
-from phosphorylation_parser_args import add_preprocess_phosphorylation_mesh_arguments
+from phosphorylation_parser_args import add_phosphorylation_preprocess_arguments
 
 
 def refine(mesh, cell_markers, facet_markers, num_refinements):
@@ -74,6 +74,6 @@ def main(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    add_preprocess_phosphorylation_mesh_arguments(parser)
+    add_phosphorylation_preprocess_arguments(parser)
     args = vars(parser.parse_args())
     raise SystemExit(main(**args))

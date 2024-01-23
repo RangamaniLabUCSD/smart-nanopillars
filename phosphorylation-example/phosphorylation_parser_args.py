@@ -34,7 +34,7 @@ def add_phosphorylation_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def add_preprocess_phosphorylation_mesh_arguments(
+def add_phosphorylation_preprocess_arguments(
     parser: argparse.ArgumentParser,
 ) -> None:
     parser.add_argument(
@@ -50,3 +50,9 @@ def add_preprocess_phosphorylation_mesh_arguments(
         action="store_true",
         default=False,
     )
+
+def add_phosphorylation_postprocess(
+        parser: argparse.ArgumentParser,
+) -> None:
+    parser.add_argument("results-folder", type=Path)
+    parser.add_argument("output-folder", type=Path)

@@ -9,10 +9,11 @@
 # $$
 from typing import NamedTuple, Dict, Any
 from pathlib import Path
-import sys
+import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import json
+import phosphorylation_parser_args
 
 
 class Data(NamedTuple):
@@ -162,19 +163,17 @@ def plot_error_different_timesteps(all_results):
    
 
 
-def main(results_folder):
+def main(results_folder: Path, output_folder: Path) -> int:
     all_results = load_results(Path(results_folder))
     plot_error_analytical_solution_different_radius(all_results)
     plot_error_different_refinements(all_results)
     plot_error_different_timesteps(all_results)
+    return 0
 
     
 
 if __name__ == "__main__":
-    try:
-        results_folder = sys.argv[1]
-    except IndexError:
-        print("Please provide the path to the results folder as an argument")
-        raise SystemExit(1)
-
-    raise SystemExit(main(results_folder))
+    parser = argparse.ArgumentParser()
+    phosphorylation_parser_args.add_phosphorylation_postprocess(parser)
+    args = vars(parser.parse_args())
+    raise SystemExit(main(**args))

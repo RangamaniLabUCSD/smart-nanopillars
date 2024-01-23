@@ -171,6 +171,22 @@ def phosphorylation_example(
         submit_saga=submit_saga,
     )
 
+def postprocess_phosphorylation(results_folder: Path, output_folder: Path, dry_run: bool = False):
+    args = [Path(results_folder).as_posix(), Path(output_folder).as_posix()]
+    script = (
+        (here / ".." / "phosphorylation-example" / "postprocess.py")
+        .absolute()
+        .resolve()
+        .as_posix()
+    )
+    run(
+        args=args,
+        dry_run=dry_run,
+        script=script,
+        submit_ex3=False,
+        submit_saga=False,
+    )    
+
 
 def preprocess_mito_mesh(
     input_mesh_file: Path,

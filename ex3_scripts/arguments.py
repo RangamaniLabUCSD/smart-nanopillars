@@ -55,16 +55,23 @@ def phosphorylation_example(parser: argparse.ArgumentParser):
     phosphorylation_parser_args.add_phosphorylation_arguments(parser)
 
 
-def preprocess_phosphorylation_mesh(parser: argparse.ArgumentParser):
+def phosphorylation_preprocess(parser: argparse.ArgumentParser):
     sys.path.insert(0, (here / ".." / "phosphorylation-example").as_posix())
     import phosphorylation_parser_args
 
-    phosphorylation_parser_args.add_preprocess_phosphorylation_mesh_arguments(parser)
+    phosphorylation_parser_args.add_phosphorylation_preprocess_arguments(parser)
+
+def postprocess_phosphorylation(parser: argparse.ArgumentParser):
+    sys.path.insert(0, (here / ".." / "phosphorylation-example").as_posix())
+    import phosphorylation_parser_args
+
+    phosphorylation_parser_args.add_phosphorylation_postprocess(parser)
 
 
 
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
+    # Root parser
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -82,11 +89,13 @@ def setup_parser() -> argparse.ArgumentParser:
     )
 
     subparsers = parser.add_subparsers(dest="command")
+
+    # Convert notebooks
     subparsers.add_parser("convert-notebooks", help="Convert notebooks to python files")
 
     # Dendritic spine
     preprocess_spine_mesh_parser = subparsers.add_parser(
-        "preprocess-spine-mesh", help="Preprocess mesh for dendritic spine example"
+        "dendritic-spine-preprocess", help="Preprocess mesh for dendritic spine example"
     )
     preprocess_spine_mesh(preprocess_spine_mesh_parser)
 
@@ -97,7 +106,7 @@ def setup_parser() -> argparse.ArgumentParser:
 
     # Mechanotransduction example
     preprocess_spine_mesh_parser = subparsers.add_parser(
-        "preprocess-mech-mesh", help="Preprocess mesh for mechanotransduction example"
+        "mechanotransduction-preprocess", help="Preprocess mesh for mechanotransduction example"
     )
     preprocess_mech_mesh(preprocess_spine_mesh_parser)
 
@@ -108,7 +117,7 @@ def setup_parser() -> argparse.ArgumentParser:
 
     # Mito example
     preprocess_mito_mesh_parser = subparsers.add_parser(
-        "preprocess-mito-mesh", help="Preprocess mesh for mito example"
+        "mito-preprocess", help="Preprocess mesh for mito example"
     )
     preprocess_mito_mesh(preprocess_mito_mesh_parser)
 
@@ -116,14 +125,19 @@ def setup_parser() -> argparse.ArgumentParser:
     mito_example(mito_parser)
 
     # Phosphorylation example
-    preprocess_phosphorylation_mesh_parser = subparsers.add_parser(
-        "preprocess-phosphorylation-mesh",
+    phosphorylation_preprocess_parser = subparsers.add_parser(
+        "phosphorylation-preprocess",
         help="Preprocess mesh for phosphorylation example",
     )
-    preprocess_phosphorylation_mesh(preprocess_phosphorylation_mesh_parser)
+    phosphorylation_preprocess(phosphorylation_preprocess_parser)
 
     phosphorylation_parser = subparsers.add_parser(
         "phosphorylation", help="Run phosphorylation example"
     )
     phosphorylation_example(phosphorylation_parser)
+
+    postprocess_phosphorylation_parser = subparsers.add_parser(
+        "phosphorylation-postprocess", help="Postprocess phosphorylation example"
+    )
+    postprocess_phosphorylation(postprocess_phosphorylation_parser)
     return parser
