@@ -7,7 +7,7 @@ import subprocess as sp
 ex3_template = dedent(
     """#!/bin/bash
 #SBATCH --job-name="{job_name}"
-#SBATCH --partition=defq
+#SBATCH --partition=fpgaq
 #SBATCH --time=3-00:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -15,16 +15,18 @@ ex3_template = dedent(
 #SBATCH --output=%j-%x-stdout.txt
 #SBATCH --error=%j-%x-stderr.txt
 
-
-module use /cm/shared/ex3-modules/202309a/defq/modulefiles
-module load python-fenics-dolfin-2019.2.0.dev0
+module use /cm/shared/ex3-modules/latest/modulefiles
+module load  gcc-10.1.0
+module load libgfortran-5.0.0
+. /home/henriknf/local/src/spack/share/spack/setup-env.sh
+spack env activate fenics-dev-fpqga
 
 SCRATCH_DIRECTORY=/global/D1/homes/${{USER}}/smart-comp-sci/{job_name}/${{SLURM_JOBID}}
 mkdir -p ${{SCRATCH_DIRECTORY}}
 echo "Scratch directory: ${{SCRATCH_DIRECTORY}}"
 
-echo 'Run command: {python} {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}'
-{python} {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}
+echo 'Run command: python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}'
+python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}
 # Move log file to results folder
 mv ${{SLURM_JOBID}}-* ${{SCRATCH_DIRECTORY}}
 """
@@ -194,32 +196,25 @@ def run_phosphorylation_example(
         return
 
     if submit_ex3:
-        job_file = Path("tmp_job.sbatch")
-        job_file.write_text(
-            ex3_template.format(
-                job_name="phosphorylation",
-                python=sys.executable,
-                script=script,
-                args=args_str,
-            )
-        )
-
-        sp.run(["sbatch", job_file])
-        job_file.unlink()
+        template = ex3_template
     elif submit_saga:
-        job_file = Path("tmp_job.sbatch")
-        job_file.write_text(
-            saga_template.format(
-                job_name="phosphorylation",
-                script=script,
-                args=args_str,
-            )
-        )
-
-        sp.run(["sbatch", job_file])
-        job_file.unlink()
+        template = saga_template
     else:
         sp.run([sys.executable, script, *args])
+        return 
+    
+    job_file = Path("tmp_job.sbatch")
+    job_file.write_text(
+        ex3_template.format(
+            job_name="phosphorylation",
+            script=script,
+            args=args_str,
+        )
+    )
+
+    sp.run(["sbatch", job_file])
+    # job_file.unlink()
+  
 
 
 def run_preprocess_mito_mesh(
@@ -303,7 +298,6 @@ def run_mito_example(
         job_file.write_text(
             ex3_template.format(
                 job_name="mito",
-                python=sys.executable,
                 script=script,
                 args=args_str,
             )
@@ -401,7 +395,6 @@ def run_mechanotransduction_example(
         job_file.write_text(
             ex3_template.format(
                 job_name="mechanotransduction",
-                python=sys.executable,
                 script=script,
                 args=args_str,
             )
@@ -496,7 +489,6 @@ def run_dendritic_spine_example(
         job_file.write_text(
             ex3_template.format(
                 job_name="dendritic-spine",
-                python=sys.executable,
                 script=script,
                 args=args_str,
             )
