@@ -53,22 +53,8 @@ def load_results(folder):
         raise RuntimeError(f"No results found in folder {folder}")
     return data
 
-
-def main(results_folder):
-    all_results = load_results(Path(results_folder))
-    results = list(
-        sorted(
-            filter(lambda d: d.refinement == 0 and np.isclose(d.dt, 0.01), all_results),
-            key=lambda d: d.radius,
-        )
-    )
-    radiusVec = np.array([d.radius for d in results])
-    ss_vec = np.array([d.ss[-1] for d in results])
-
-    fig, ax = plt.subplots()
-    ax.plot(radiusVec, ss_vec, "ro")
-    radiusTest = np.logspace(0, 1, 100)
-    thieleMod = radiusTest / 1.0
+def analytical_solution(radius):
+    thieleMod = radius / 1.0
     k_kin = 50
     k_p = 10
     cT = 1
@@ -76,18 +62,36 @@ def main(results_folder):
     C1 = (
         k_kin
         * cT
-        * radiusTest**2
+        * radius**2
         / (
-            (3 * D * (np.sqrt(k_p / D) - (1 / radiusTest)) + k_kin * radiusTest)
+            (3 * D * (np.sqrt(k_p / D) - (1 / radius)) + k_kin * radius)
             * np.exp(thieleMod)
-            + (3 * D * (np.sqrt(k_p / D) + (1 / radiusTest)) - k_kin * radiusTest)
+            + (3 * D * (np.sqrt(k_p / D) + (1 / radius)) - k_kin * radius)
             * np.exp(-thieleMod)
         )
     )
-    cA = (6 * C1 / radiusTest) * (
+    return (6 * C1 / radius) * (
         np.cosh(thieleMod) / thieleMod - np.sinh(thieleMod) / thieleMod**2
     )
-    ax.plot(radiusTest, cA)
+
+
+def plot_error_analytical_solution_different_radius(all_results):
+    results = list(
+        sorted(
+            filter(lambda d: d.refinement == 0 and np.isclose(d.dt, 0.01), all_results),
+            key=lambda d: d.radius,
+        )
+    )
+    radiusVec = np.array([d.radius for d in results])
+    cA = analytical_solution(radiusVec)
+    radiusTest = np.logspace(0, 1, 100)
+    cA_smooth = analytical_solution(radiusTest)
+    ss_vec = np.array([d.ss[-1] for d in results])
+
+    fig, ax = plt.subplots()
+    ax.plot(radiusVec, ss_vec, "ro")
+    
+    ax.plot(radiusTest, cA_smooth)
     ax.set_xlabel("Cell radius (μm)")
     ax.set_ylabel("Steady state concentration (μM)")
     ax.legend(("SMART simulation", "Analytical solution"))
@@ -97,25 +101,7 @@ def main(results_folder):
     # in simulations deviates less than 1% from the known analytical value.
 
     # quantify percent error
-    thieleMod = radiusVec / 1.0
-    k_kin = 50
-    k_p = 10
-    cT = 1
-    D = 10
-    C1 = (
-        k_kin
-        * cT
-        * radiusVec**2
-        / (
-            (3 * D * (np.sqrt(k_p / D) - (1 / radiusVec)) + k_kin * radiusVec)
-            * np.exp(thieleMod)
-            + (3 * D * (np.sqrt(k_p / D) + (1 / radiusVec)) - k_kin * radiusVec)
-            * np.exp(-thieleMod)
-        )
-    )
-    cA = (6 * C1 / radiusVec) * (
-        np.cosh(thieleMod) / thieleMod - np.sinh(thieleMod) / thieleMod**2
-    )
+   
     percentError = 100 * np.abs(ss_vec - cA) / cA
     fig, ax = plt.subplots()
     ax.plot(radiusVec, percentError)
@@ -128,6 +114,61 @@ def main(results_folder):
     rmse = np.sqrt(np.mean(percentError**2))
     print(f"RMSE with respect to analytical solution = {rmse:.3f}%")
 
+
+def plot_error_different_refinements(all_results):
+    radii = sorted({r.radius for r in all_results})
+    fig, ax = plt.subplots()
+    for radius in radii:
+        print(radius)
+        results = list(
+            sorted(
+                filter(lambda d: np.isclose(d.radius, radius) and np.isclose(d.dt, 0.01), all_results),
+                key=lambda d: d.refinement,
+            )
+        )
+        refinements = np.array([d.refinement for d in results])
+        cA = analytical_solution(radius)
+        ss_vec = np.array([d.ss[-1] for d in results])
+        percentError = 100 * np.abs(ss_vec - cA) / cA
+        ax.plot(refinements, percentError, marker="o", label=radius)
+        ax.set_xticks(refinements)
+    ax.legend(title="Radius")
+    ax.set_xlabel("Refinement")
+    ax.set_ylabel("Percent error from analytical solution")
+    fig.savefig("percent_error_refinement.png")
+
+
+def plot_error_different_timesteps(all_results):
+    radii = sorted({r.radius for r in all_results})
+    fig, ax = plt.subplots()
+    for radius in radii:
+        print(radius)
+        results = list(
+            sorted(
+                filter(lambda d: np.isclose(d.radius, radius) and d.refinement == 0, all_results),
+                key=lambda d: d.dt,
+            )
+        )
+        dts = np.array([d.dt for d in results])
+        cA = analytical_solution(radius)
+        ss_vec = np.array([d.ss[-1] for d in results])
+        percentError = 100 * np.abs(ss_vec - cA) / cA
+        ax.plot(dts, percentError, marker="o", label=radius)
+        ax.set_xticks(dts)
+    ax.legend(title="Radius")
+    ax.set_xlabel("Time step [s]")
+    ax.set_ylabel("Percent error from analytical solution")
+    fig.savefig("percent_error_timestep.png")
+   
+
+
+def main(results_folder):
+    all_results = load_results(Path(results_folder))
+    plot_error_analytical_solution_different_radius(all_results)
+    plot_error_different_refinements(all_results)
+    plot_error_different_timesteps(all_results)
+
+    
 
 if __name__ == "__main__":
     try:
