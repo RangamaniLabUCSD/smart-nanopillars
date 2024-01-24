@@ -28,6 +28,10 @@ commands = {
         msg="Run mechanotransduction example",
         script=runner.mechanotransduction_example
     ),
+    "mechanotransduction-postprocess": Command(
+        msg="Postprocess mechanotransduction example",
+        script=runner.postprocess_mechanotransduction
+    ),
     "mito-preprocess": Command(
         msg="Run preprocess mito mesh",
         script=runner.preprocess_mito_mesh

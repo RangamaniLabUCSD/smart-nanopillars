@@ -54,5 +54,5 @@ def add_phosphorylation_preprocess_arguments(
 def add_phosphorylation_postprocess(
         parser: argparse.ArgumentParser,
 ) -> None:
-    parser.add_argument("results-folder", type=Path)
-    parser.add_argument("output-folder", type=Path)
+    parser.add_argument("results_folder", type=Path)
+    parser.add_argument("output_folder", type=Path)

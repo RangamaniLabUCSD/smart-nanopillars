@@ -27,6 +27,13 @@ def mechanotransduction_example(parser: argparse.ArgumentParser):
     mech_parser_args.add_mechanotransduction_arguments(parser)
 
 
+def mechanotransduction_postprocess(parser: argparse.ArgumentParser):
+    sys.path.insert(0, (here / ".." / "mechanotransduction-example").as_posix())
+    import mech_parser_args
+
+    mech_parser_args.add_mechanotransduction_postprocess_arguments(parser)
+
+
 def preprocess_mech_mesh(parser: argparse.ArgumentParser):
     sys.path.insert(0, (here / ".." / "mechanotransduction-example").as_posix())
     import mech_parser_args
@@ -114,6 +121,12 @@ def setup_parser() -> argparse.ArgumentParser:
         "mechanotransduction", help="Run mechanotransduction example"
     )
     mechanotransduction_example(mechanotransduction_parser)
+
+    mechanotransduction_postprocess_parser = subparsers.add_parser(
+        "mechanotransduction-postprocess", help="Postprocess mechanotransduction example"
+    )
+    mechanotransduction_postprocess(mechanotransduction_postprocess_parser)
+
 
     # Mito example
     preprocess_mito_mesh_parser = subparsers.add_parser(

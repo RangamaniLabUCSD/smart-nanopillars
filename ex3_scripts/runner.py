@@ -171,7 +171,7 @@ def phosphorylation_example(
         submit_saga=submit_saga,
     )
 
-def postprocess_phosphorylation(results_folder: Path, output_folder: Path, dry_run: bool = False):
+def postprocess_phosphorylation(results_folder: Path, output_folder: Path, dry_run: bool = False, **kwargs):
     args = [Path(results_folder).as_posix(), Path(output_folder).as_posix()]
     script = (
         (here / ".." / "phosphorylation-example" / "postprocess.py")
@@ -354,6 +354,21 @@ def mechanotransduction_example(
         submit_saga=submit_saga,
     )
 
+def postprocess_mechanotransduction(results_folder: Path, output_folder: Path, dry_run: bool = False, **kwargs):
+    args = [Path(results_folder).as_posix(), Path(output_folder).as_posix()]
+    script = (
+        (here / ".." / "mechanotransduction-example" / "postprocess.py")
+        .absolute()
+        .resolve()
+        .as_posix()
+    )
+    run(
+        args=args,
+        dry_run=dry_run,
+        script=script,
+        submit_ex3=False,
+        submit_saga=False,
+    )    
 
 def preprocess_spine_mesh(
     input_mesh_file: Path,

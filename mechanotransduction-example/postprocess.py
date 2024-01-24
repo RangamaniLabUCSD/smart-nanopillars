@@ -1,15 +1,14 @@
 from __future__ import annotations
-# module use /cm/shared/ex3-modules/202309a/defq/modulefiles
-# module load python-fenics-dolfin-2019.2.0.dev0
-# . ~/local/src/smart-comp-sci/venv/bin/activate
+import argparse
 from pathlib import Path
 import pandas as pd
 import json
 from typing import NamedTuple, Any
 from itertools import cycle
 import numpy as np
-import datetime
 import matplotlib.pyplot as plt
+
+import mech_parser_args
 
 
 class Data(NamedTuple):
@@ -25,7 +24,7 @@ class Data(NamedTuple):
     
     @property
     def num_refinements(self) -> int:
-        return int(Path(self.config["mesh_file"]).stem.split("_")[-1])
+        return int(Path(self.config["mesh_file"]).name.split("_")[-1])
     
     @property
     def dt(self) -> float:
@@ -36,12 +35,13 @@ class Data(NamedTuple):
         return self.timings[self.timings["name"] == "mechanotransduction-example"]["wall tot"].values[0]
 
 
-def load_all_data(main_path: str):
+def load_all_data(main_path: Path):
     all_data = []
     for folder in (f for f in Path(main_path).iterdir() if f.is_dir()):
         
         try:
             data = load_data(folder=folder)
+            print(f"Load data from folder {folder}")
         except FileNotFoundError as e:
             print(f"Skipping folder {folder}, due to {e}")
             continue
@@ -49,9 +49,9 @@ def load_all_data(main_path: str):
     return all_data
 
 def is_default(d: Data) -> bool:
-    return np.isclose(d.dt, 0.01) and not d.enforce_mass_conservation and d.num_refinements == 0
+    return np.isclose(d.dt, 0.01) and d.enforce_mass_conservation and d.num_refinements == 0
 
-def plot_data(data: list[Data]):
+def plot_data(data: list[Data], output_folder):
     fig, ax = plt.subplots(2, 3, sharex=True, sharey="row", figsize=(12, 8))
     fig_t, ax_t = plt.subplots(1, 3, sharey=True, figsize=(12, 4))    
     linestyles = [cycle(["-", "--", ":", "-."]) for _ in range(3)]
@@ -117,8 +117,9 @@ def plot_data(data: list[Data]):
     for i in range(2):
         ax[1, i].set_xlabel("Time [s]")
 
-    fig.savefig("mechanotransduction_yap.png")
-    fig_t.savefig("timings_mechanotransduction.png")
+    Path(output_folder).mkdir(exist_ok=True, parents=True)
+    fig.savefig(Path(output_folder) / "mechanotransduction_yap.png")
+    fig_t.savefig(Path(output_folder) / "timings_mechanotransduction.png")
 
 
         
@@ -166,10 +167,14 @@ def load_data(folder: Path = Path("82094")) -> Data:
 
     return Data(timings=timings, config=config, t=t, yap=yap, fac=fac)
     
-def main():
-    data = load_all_data("/global/D1/homes/henriknf/smart-comp-sci/mechanotransduction/first_run")
-    plot_data(data)
+def main(results_folder: Path, output_folder: Path) -> int:
+    # data = load_all_data("/global/D1/homes/henriknf/smart-comp-sci/mechanotransduction/first_run")
+    data = load_all_data(results_folder)
+    plot_data(data, output_folder)
     
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    mech_parser_args.add_mechanotransduction_postprocess_arguments(parser)
+    args = vars(parser.parse_args())
+    raise SystemExit(main(**args))
