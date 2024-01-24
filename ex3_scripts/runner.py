@@ -88,6 +88,9 @@ def run(args, dry_run: bool, script: str, submit_ex3: bool, submit_saga: bool, j
             args=args_str,
         )
     )
+    sp.run(["sbatch", job_file.as_posix()])
+    job_file.unlink()
+
 
 
 def preprocess_phosphorylation_mesh(
