@@ -68,6 +68,12 @@ def main(
     mesh_folder = Path(mesh_folder)
     mesh_folder.mkdir(exist_ok=True, parents=True)
     mesh_file = mesh_folder / "DemoSphere.h5"
+    with d.XDMFFile((mesh_folder / "mesh.xdmf").as_posix()) as f:
+        f.write(cell_mesh)
+    with d.XDMFFile((mesh_folder / "facet_markers.xdmf").as_posix()) as f:
+        f.write(facet_markers)
+    with d.XDMFFile((mesh_folder / "cell_markers.xdmf").as_posix()) as f:
+        f.write(cell_markers)
     mesh_tools.write_mesh(cell_mesh, facet_markers, cell_markers, mesh_file)
     print("Saved mesh to", mesh_file)
 
