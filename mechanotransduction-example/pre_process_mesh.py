@@ -33,7 +33,7 @@ def shape2theta(shape: Shape) -> str:
     # star_str2 = "0.9 + 0.6164*cos(5*theta)"
     if Shape[shape].value == "circle":
         return ""
-    elif Shape[shape].value == "start":
+    elif Shape[shape].value == "star":
         return "0.98 + 0.2814*cos(5*theta)"
     elif Shape[shape].value == "rect":
         return "rect0.6"

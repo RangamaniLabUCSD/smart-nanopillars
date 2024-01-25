@@ -81,6 +81,7 @@ def run_preprocess_mito_mesh(
     output_curv_file: Path,
     dry_run: bool,
     num_refinements: int,
+    single_compartment_im: bool,
     **kwargs,
 ):
     args = [
@@ -95,6 +96,9 @@ def run_preprocess_mito_mesh(
         "--num-refinements",
         num_refinements,
     ]
+
+    if single_compartment_im:
+        args.append("--single-compartment-im")
 
     script = (
         (here / ".." / "mito-example" / "pre_process_mesh.py")
@@ -117,6 +121,7 @@ def run_mito_example(
     time_step: float,
     curv_dep: float,
     enforce_mass_conservation: bool,
+    D: float,
     dry_run: bool = False,
     submit_ex3: bool = False,
     **kwargs,
@@ -130,6 +135,8 @@ def run_mito_example(
         time_step,
         "--curv-dep",
         curv_dep,
+        "--D",
+        D,
     ]
     if enforce_mass_conservation:
         args.append("--enforce-mass-conservation")

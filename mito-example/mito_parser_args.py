@@ -33,6 +33,11 @@ def add_run_mito_arguments(parser: argparse.ArgumentParser) -> None:
         "--enforce-mass-conservation",
         action='store_true'
     )
+    parser.add_argument(
+        "--D",
+        type=float,
+        default=15.0
+    )
 
 
 def add_preprocess_mito_mesh_arguments(parser: argparse.ArgumentParser) -> None:
@@ -61,4 +66,8 @@ def add_preprocess_mito_mesh_arguments(parser: argparse.ArgumentParser) -> None:
         "--num-refinements",
         type=int,
         default=0,
+    )
+    parser.add_argument(
+        "--single-compartment-im",
+        action="store_true",
     )
