@@ -286,6 +286,16 @@ for species_name, species in model_cur.sc.items:
     results[species_name].parameters["flush_output"] = True
     results[species_name].write(model_cur.sc[species_name].u["u"], model_cur.t)
 
+results["A_proj"] = d.XDMFFile(
+    model_cur.mpi_comm_world, str(result_folder / f"A_proj.xdmf")
+)
+results["A_proj"].parameters["flush_output"] = True
+boundary_flux = model_cur.fc["r1 [Aphos (f)]"]
+# results["A_proj"].write(model_cur.fc["r1 [Aphos (f)]"].proj_var["Aphos"], model_cur.t)
+surf_space = d.FunctionSpace(boundary_flux.surface.dolfin_mesh, "CG", 1)
+cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
+results["A_proj"].write(cur_interp, model_cur.t)
+
 model_cur.to_pickle(result_folder / "model_cur.pkl")
 import json
 
@@ -324,6 +334,9 @@ while True:
     # Save results for post processing
     for species_name, species in model_cur.sc.items:
         results[species_name].write(model_cur.sc[species_name].u["u"], model_cur.t)
+    # results["A_proj"].write(model_cur.fc["r1 [Aphos (f)]"].proj_var["Aphos"], model_cur.t)
+    cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
+    results["A_proj"].write(cur_interp, model_cur.t)
     # compute average Aphos concentration at each time step
     int_val = d.assemble(model_cur.sc["Aphos"].u["u"] * dx)
     avg_Aphos.append(int_val / volume)
@@ -342,3 +355,17 @@ ax.set_ylabel("Aphos concentration (μM)")
 fig.savefig(result_folder / "avg_Aphos.png")
 np.savetxt(result_folder / "avg_Aphos.txt", avg_Aphos)
 np.savetxt(result_folder / "tvec.txt", model_cur.tvec)
+
+# L2 error
+xvec = d.SpatialCoordinate(cc["Cyto"].dolfin_mesh)
+r = d.sqrt(xvec[0]**2 + xvec[1]**2 + (xvec[2])**2)
+k_kin = kkin.value
+k_p = kp.value
+cT = Atot.value
+D = Aphos.D
+thieleMod = curRadius / np.sqrt(D/k_p)
+C1 = k_kin*cT*curRadius**2/((3*D*(np.sqrt(k_p/D)-(1/curRadius)) + k_kin*curRadius)*np.exp(thieleMod) +
+                             (3*D*(np.sqrt(k_p/D)+(1/curRadius))-k_kin*curRadius)*np.exp(-thieleMod))
+sol = C1*(d.exp(r/np.sqrt(D/k_p))-d.exp(-r/np.sqrt(D/k_p)))/r
+L2norm = d.assemble((sol-model_cur.sc["Aphos"].u["u"])**2 *dx)
+np.savetxt(result_folder / "L2norm.txt", np.array([L2norm]))
