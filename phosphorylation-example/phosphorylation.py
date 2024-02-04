@@ -369,3 +369,14 @@ C1 = k_kin*cT*curRadius**2/((3*D*(np.sqrt(k_p/D)-(1/curRadius)) + k_kin*curRadiu
 sol = C1*(d.exp(r/np.sqrt(D/k_p))-d.exp(-r/np.sqrt(D/k_p)))/r
 L2norm = d.assemble((sol-model_cur.sc["Aphos"].u["u"])**2 *dx)
 np.savetxt(result_folder / "L2norm.txt", np.array([L2norm]))
+
+logger.info("Done with solve loop")
+timer.stop()
+timings = d.timings(
+    d.TimingClear.keep,
+    [d.TimingType.wall, d.TimingType.user, d.TimingType.system],
+).str(True)
+
+print(timings)
+
+(result_folder / "timings.txt").write_text(timings)
