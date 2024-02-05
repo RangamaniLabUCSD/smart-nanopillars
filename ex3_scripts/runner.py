@@ -1,10 +1,7 @@
 import sys
 from textwrap import dedent
 from pathlib import Path
-import argparse
 import subprocess as sp
-
-import arguments
 
 ex3_template = dedent(
     """#!/bin/bash
@@ -65,7 +62,14 @@ mv ${{SUBMIT_DIRECTORY}}/${{SLURM_JOBID}}-* ${{SCRATCH_DIRECTORY}}
 here = Path(__file__).parent.absolute()
 
 
-def run(args, dry_run: bool, script: str, submit_ex3: bool, submit_saga: bool, job_name: str=""):
+def run(
+    args,
+    dry_run: bool,
+    script: str,
+    submit_ex3: bool,
+    submit_saga: bool,
+    job_name: str = "",
+):
     args = list(map(str, args))
     args_str = " ".join(args)
     if dry_run:
@@ -90,7 +94,6 @@ def run(args, dry_run: bool, script: str, submit_ex3: bool, submit_saga: bool, j
     )
     sp.run(["sbatch", job_file.as_posix()])
     job_file.unlink()
-
 
 
 def preprocess_phosphorylation_mesh(
@@ -174,8 +177,28 @@ def phosphorylation_example(
         submit_saga=submit_saga,
     )
 
-def postprocess_phosphorylation(results_folder: Path, output_folder: Path, dry_run: bool = False, **kwargs):
-    args = [Path(results_folder).as_posix(), Path(output_folder).as_posix()]
+
+def postprocess_phosphorylation(
+    results_folder: Path,
+    output_folder: Path,
+    skip_if_processed: bool = False,
+    use_tex: bool = False,
+    dry_run: bool = False,
+    format: str = "png",
+    **kwargs,
+):
+    args = [
+        "--results-folder",
+        Path(results_folder).as_posix(),
+        "--output-folder",
+        Path(output_folder).as_posix(),
+        "--format",
+        format,
+    ]
+    if skip_if_processed:
+        args.append("--skip-if-processed")
+    if use_tex:
+        args.append("--use-tex")
     script = (
         (here / ".." / "phosphorylation-example" / "postprocess.py")
         .absolute()
@@ -188,7 +211,7 @@ def postprocess_phosphorylation(results_folder: Path, output_folder: Path, dry_r
         script=script,
         submit_ex3=False,
         submit_saga=False,
-    )    
+    )
 
 
 def preprocess_mito_mesh(
@@ -308,6 +331,7 @@ def pre_preprocess_mech_mesh(
         submit_saga=False,
     )
 
+
 def mechanotransduction_example(
     mesh_folder: Path,
     outdir: Path,
@@ -357,8 +381,16 @@ def mechanotransduction_example(
         submit_saga=submit_saga,
     )
 
-def postprocess_mechanotransduction(results_folder: Path, output_folder: Path, dry_run: bool = False, **kwargs):
-    args = [Path(results_folder).as_posix(), Path(output_folder).as_posix()]
+
+def postprocess_mechanotransduction(
+    results_folder: Path, output_folder: Path, dry_run: bool = False, **kwargs
+):
+    args = [
+        "--results-folder",
+        Path(results_folder).as_posix(),
+        "--output-folder",
+        Path(output_folder).as_posix(),
+    ]
     script = (
         (here / ".." / "mechanotransduction-example" / "postprocess.py")
         .absolute()
@@ -371,7 +403,8 @@ def postprocess_mechanotransduction(results_folder: Path, output_folder: Path, d
         script=script,
         submit_ex3=False,
         submit_saga=False,
-    )    
+    )
+
 
 def preprocess_spine_mesh(
     input_mesh_file: Path,

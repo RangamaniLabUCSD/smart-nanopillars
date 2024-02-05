@@ -88,7 +88,7 @@ def add_preprocess_mech_mesh_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def add_mechanotransduction_postprocess_arguments(
-        parser: argparse.ArgumentParser,
+    parser: argparse.ArgumentParser,
 ) -> None:
-    parser.add_argument("results_folder", type=Path)
-    parser.add_argument("output_folder", type=Path)
+    parser.add_argument("-i", "--results-folder", type=Path, default="./results")
+    parser.add_argument("-o", "--output-folder", type=Path, default="./")
