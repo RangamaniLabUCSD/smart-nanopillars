@@ -63,7 +63,7 @@ def main():
         print(cmd.msg)
         cmd.script(**args)
     except KeyError:
-        raise ValueError(f"Invaild command: {args['command']}")
+        raise ValueError(f"Invalid command: {args['command']}")
 
 
 if __name__ == "__main__":

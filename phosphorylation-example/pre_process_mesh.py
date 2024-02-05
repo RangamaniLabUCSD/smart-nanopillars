@@ -38,7 +38,7 @@ def main(
     num_refinements: int = 0,
     axisymmetric: bool = False,
 ):
-    print("Generating mesh")
+    print(f"Generating mesh with hEdge={hEdge}")
     # initialize current mesh
     if axisymmetric:
         cell_mesh, facet_markers, cell_markers = mesh_tools.create_2Dcell(
