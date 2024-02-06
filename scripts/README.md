@@ -36,7 +36,7 @@ optional arguments:
                         saga cluster
 ```
 
-There are currently four ways of executing the script. 
+There are currently 5 ways to execute the scripts. 
 
 1. By running the script without any additional flags, e.g
     ```
@@ -55,6 +55,7 @@ There are currently four ways of executing the script.
     ```
     python3 main.py --dry-run phosphorylation
     ```    
+5. You can navigate to the example folders and run the notebooks directly using `jupyter`
 
 
 ## Setup environment 
@@ -118,7 +119,7 @@ Now you would need to modify the template in [`runner.py`](runner.py) to match t
 
 ## Running the scripts
 
-All the scripts are available as Jupyter notbooks, and before running the scripts you need to convert these notebooks.
+All the scripts are available as Jupyter notbooks. If you want to run the examples using the `main.py` script in the following folder, you need to convert the notebooks to python files first. 
 
 
 ### Convert notebooks to python files
