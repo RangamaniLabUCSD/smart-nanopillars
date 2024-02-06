@@ -2,6 +2,7 @@
 Examples and numerical tests for SMART scientific computing paper.
 
 To run the code in this repository, it is necessary to install [SMART (Spatial Modeling Algorithms for Reaction and Transport)](https://github.com/RangamaniLabUCSD/smart.git).
+See more info about running the code and reproducing the results in the [scripts](scripts) folder.
 
 Shield: [![CC BY-SA 4.0][cc-by-sa-shield]][cc-by-sa]
 

@@ -22,7 +22,7 @@ def add_run_mito_arguments(parser: argparse.ArgumentParser) -> None:
         "-dt",
         "--time-step",
         type=float,
-        default=0.0001,
+        default=2e-5,
     )
     parser.add_argument(
         "--curv-dep",

@@ -1,0 +1,382 @@
+# # Example 3: Protein phosphorylation and diffusion in 3D cell geometry
+#
+# Here, we implement the model of protein phosphorylation at the cell membrane and diffusion in the cytosol from [Meyers, Craig, and Odde 2006, Current Biology](https://doi.org/10.1016/j.cub.2006.07.056).
+#
+# This model geometry consists of 2 domains - one surface and one volume:
+# - plasma membrane (PM) - cell surface
+# - cytosol - intracellular volume
+#
+# In this case, we only model the case of a spherical cell, where the cytosol corresponds to the interior of the sphere and the PM corresponds to the surface of the sphere.
+#
+# This model includes a single species, A, which is phosphorylated at the cell membrane. The unphosphorylated form of A ($A_{dephos}$) can be computed from mass conservation; everywhere $c_{A_{phos}} + c_{A_{dephos}} = c_{Tot}$, which is a constant in both time and space if the phosphorylated vs. unphosphorylated forms have the same diffusion coefficient.
+#
+# There are two reactions - one in the PM and other in the cytosol. At the membrane, $A_{dephos}$ is phosphorylated by a first-order reaction with rate $k_{kin}$, and in the cytosolic volume, $A_{phos}$ is dephosphorylated by a first order reaction with rate $k_p$. The resulting equations are:
+#
+# $$
+# \frac{\partial{c_{A_{phos}}}}{\partial{t}} = D_{A_{phos}} \nabla ^2 c_{A_{phos}} - k_p c_{A_{phos}} \quad \text{in} \; \Omega_{Cyto}\\
+# \text{B.C.:} \quad D_{A_{phos}}  (\textbf{n} \cdot \nabla c_{A_{phos}})  = k_{kin} c_{A_{dephos}} \quad \text{on} \; \Gamma_{PM}
+# $$
+#
+# where we note that $c_{A_{dephos}} = c_{Tot} - c_{A_{phos}}$ in the boundary condition due to mass conservation.
+#
+# In this file, we test this model over multiple cell sizes and compare the results to analytical predictions. Please note that because we are testing several different geometries, this file may take an hour or more to complete execution.
+
+# +
+import dolfin as d
+import numpy as np
+import pathlib
+import argparse
+import logging
+
+from smart import config, mesh, model, mesh_tools
+from smart.units import unit
+
+from smart import config, mesh, model, mesh_tools, visualization
+from smart.model_assembly import (
+    Compartment,
+    Parameter,
+    Reaction,
+    Species,
+    SpeciesContainer,
+    ParameterContainer,
+    CompartmentContainer,
+    ReactionContainer,
+)
+
+from matplotlib import pyplot as plt
+from phosphorylation_parser_args import add_phosphorylation_arguments
+
+
+# -
+
+# We will set the logging level to `INFO`. This will display some output during the simulation. If you want to get even more output you could set the logging level to `DEBUG`.
+
+smart_logger = logging.getLogger("smart")
+smart_logger.setLevel(logging.DEBUG)
+logger = logging.getLogger("example3")
+logger.setLevel(logging.INFO)
+logger.info("Starting phosphorylation example")
+
+# -
+
+parser = argparse.ArgumentParser()
+add_phosphorylation_arguments(parser)
+args = vars(parser.parse_args())
+timer = d.Timer("phosphorylation-example")
+
+# Futhermore, you could also save the logs to a file by attaching a file handler to the logger as follows.
+#
+# ```
+# file_handler = logging.FileHandler("filename.log")
+# file_handler.setFormatter(logging.Formatter(smart.config.base_format))
+# logger.addHandler(file_handler)
+# ```
+
+# Now, we define various units used in this problem.
+
+uM = unit.uM
+um = unit.um
+molecule = unit.molecule
+sec = unit.sec
+dimensionless = unit.dimensionless
+D_unit = um**2 / sec
+flux_unit = molecule / (um**2 * sec)
+vol_unit = uM
+
+# ## Generate model
+# Next we generate the model, which consists of four containers - compartments, species, reactions, and parameters.
+#
+# ### Compartments
+# As described above, the two compartments are the cytosol ("Cyto") and the plasma membrane ("PM"). These are initialized by calling:
+# ```
+# compartment_var = Compartment(name, dimensionality, compartment_units, cell_marker)
+# ```
+# where
+# - name: string naming the compartment
+# - dimensionality: topological dimensionality (i.e. 3 for Cyto, 2 for PM)
+# - compartment_units: length units for the compartment (um for both here)
+# - cell_marker: integer marker value identifying each compartment in the parent mesh
+
+if args["axisymmetric"]:
+    Cyto = Compartment("Cyto", 2, um, 1)
+    PM = Compartment("PM", 1, um, 10)
+else:
+    Cyto = Compartment("Cyto", 3, um, 1)
+    PM = Compartment("PM", 2, um, 10)
+
+# Create a compartment container.
+
+cc = CompartmentContainer()
+cc.add([PM, Cyto])
+
+# ### Species
+# In this case, we have a single species, "A", which exists in the cytosol. A single species is initialized by calling:
+# ```
+# species_var = Species(
+#             name, initial_condition, concentration_units,
+#             D, diffusion_units, compartment_name, group (opt)
+#         )
+# ```
+# where
+# - name: string naming the species
+# - initial_condition: initial concentration for this species (can be an expression given by a string to be parsed by sympy - the only unknowns in the expression should be x, y, and z)
+# - concentration_units: concentration units for this species (μM here)
+# - D: diffusion coefficient
+# - diffusion_units: units for diffusion coefficient (μm<sup>2</sup>/sec here)
+# - compartment_name: each species should be assigned to a single compartment ("Cyto", here)
+# - group (opt): for larger models, specifies a group of species this belongs to;
+#             for organizational purposes when there are multiple reaction modules
+
+Aphos = Species("Aphos", 0.1, vol_unit, 10.0, D_unit, "Cyto")
+
+# Create a species container.
+
+sc = SpeciesContainer()
+sc.add([Aphos])
+
+# ### Parameters and Reactions
+# Parameters and reactions are generally defined together, although the order does not strictly matter. Parameters are specified as:
+# ```
+# param_var = Parameter(name, value, unit, group (opt), notes (opt), use_preintegration (opt))
+# ```
+# where
+# - name: string naming the parameter
+# - value: value of the given parameter
+# - unit: units associated with given value
+# - group (optional): optional string placing this reaction in a reaction group; for organizational purposes when there are multiple reaction modules
+# - notes (optional): string related to this parameter
+# - use_preintegration (optional): in the case of a time-dependent parameter, uses preintegration in the solution process
+#
+# Reactions are specified by a variable number of arguments (arguments are indicated by (opt) are either never
+# required or only required in some cases, for more details see notes below and API documentation):
+# ```
+# reaction_var = Reaction(
+#                 name, lhs, rhs, param_map,
+#                 eqn_f_str (opt), eqn_r_str (opt), reaction_type (opt), species_map,
+#                 explicit_restriction_to_domain (opt), group (opt), flux_scaling (opt)
+#             )
+# ```
+# - name: string naming the reaction
+# - lhs: list of strings specifying the reactants for this reaction
+# - rhs: list of strings specifying the products for this reaction
+#     ***NOTE: the lists "reactants" and "products" determine the stoichiometry of the reaction;
+#        for instance, if two A's react to give one B, the reactants list would be ["A","A"],
+#        and the products list would be ["B"]
+# - param_map: relationship between the parameters specified in the reaction string and those given
+#               in the parameter container. By default, the reaction parameters are "kon" and "koff" when
+#               a system obeys simple mass action. If the forward rate is given by a parameter "k1" and the
+#               reverse rate is given by "k2", then param_map = {"on":"k1", "off":"k2"}
+# - eqn_f_str: For systems not obeying simple mass action, this string specifies the forward reaction rate
+#              By default, this string is "on*{all reactants multiplied together}"
+# - eqn_r_str: For systems not obeying simple mass action, this string specifies the reverse reaction rate
+#              By default, this string is "off*{all products multiplied together}"
+# - reaction_type (opt): either "custom" or "mass_action" (default is "mass_action") [never a required argument]
+# - species_map: same format as param_map; required if other species not listed in reactants or products appear in the
+#             reaction string
+# - explicit_restriction_to_domain: string specifying where the reaction occurs; required if the reaction is not
+#                                   constrained by the reaction string (e.g., if production occurs only at the boundary,
+#                                   as it does here, but the species being produced exists through the entire volume)
+# - group (opt): string placing this reaction in a reaction group; for organizational purposes when there are multiple reaction modules
+# - flux_scaling (opt): in certain cases, a given reactant or product may experience a scaled flux (for instance, if we assume that
+#                 some of the molecules are immediately sequestered after the reaction); in this case, to signify that this flux
+#                 should be rescaled, we specify ''flux_scaling = {scaled_species: scale_factor}'', where scaled_species is a
+#                 string specifying the species to be scaled and scale_factor is a number specifying the rescaling factor
+
+Atot = Parameter("Atot", 1.0, vol_unit)
+# Phosphorylation of Adephos at the PM
+kkin = Parameter("kkin", 50.0, 1 / sec)
+curRadius = args["curRadius"]  # first radius value to test
+# vol to surface area ratio of the cell (overwritten for each cell size)
+VolSA = Parameter("VolSA", curRadius / 3, um)
+r1 = Reaction(
+    "r1",
+    [],
+    ["Aphos"],
+    param_map={"kon": "kkin", "Atot": "Atot", "VolSA": "VolSA"},
+    eqn_f_str="kon*VolSA*(Atot - Aphos)",
+    species_map={"Aphos": "Aphos"},
+    explicit_restriction_to_domain="PM",
+)
+# Dephosphorylation of Aphos in the cytosol
+kp = Parameter("kp", 10.0, 1 / sec)
+r2 = Reaction(
+    "r2",
+    ["Aphos"],
+    [],
+    param_map={"kon": "kp"},
+    eqn_f_str="kp*Aphos",
+    species_map={"Aphos": "Aphos"},
+)
+
+# Create parameter and reaction containers.
+
+# +
+pc = ParameterContainer()
+pc.add([Atot, kkin, VolSA, kp])
+
+rc = ReactionContainer()
+rc.add([r1, r2])
+# -
+
+# ## Create/load in mesh
+#
+# In SMART we have different levels of meshes. Here, for our first mesh, we specify a sphere of radius 1.
+#
+# $$
+# \Omega: r \in [0, 1] \subset \mathbb{R}^3\\
+# \text{where} \qquad r = \sqrt{x^2 + y^2 + z^2}
+# $$
+#
+# which will serve as our parent mesh, giving the overall cell geometry.
+#
+# Different domains can be specified within this parent mesh by assigning marker values to cells (3D) or facets (2D) within the mesh. A subdomain within the parent mesh, defined by a region which shares the same marker value, is referred to as a child mesh.
+#
+# Here, we have two child meshes corresponding to the 2 compartments specified in the compartment container. As defined above, "PM" is a 2D compartment defined by facets with marker value 10 and "Cyto" is a 3D compartment defined by cells with marker value 1. These subdomains are defined by:
+# - $\Omega_{Cyto}: r \in [0, 1) \subset \mathbb{R}^3$
+# - $\Gamma_{PM}: r=1 \subset \mathbb{R}^3$
+#
+# We generate the parent mesh with appropriate markers using gmsh in the function `mesh_tools.create_spheres`
+
+# Load mesh
+mesh_file = args["mesh_folder"] / "DemoSphere.h5"
+parent_mesh = mesh.ParentMesh(
+    str(mesh_file),
+    mesh_filetype="hdf5",
+    name="parent_mesh",
+)
+
+# ## Initialize model and solver
+#
+# Now we modify the solver configuration for this problem. In the solver config, we set the final t as 1 s, the initial dt at .01 s (without any additional specifications, this will be the time step for the whole simulation), and the time precision (number of digits after the decimal point to round to) as 6.
+
+config_cur = config.Config()
+model_cur = model.Model(pc, sc, cc, rc, config_cur, parent_mesh)
+config_cur.flags.update(
+    {
+        "axisymmetric_model": args["axisymmetric"],
+        "enforce_mass_conservation": not args["no_enforce_mass_conservation"],
+    }
+)
+config_cur.solver.update(
+    {
+        "final_t": 1,
+        "initial_dt": args["time_step"],
+        "time_precision": 6,
+    }
+)
+
+
+# Now we initialize the model and solver.
+
+model_cur.initialize()
+
+# ## Solve model and store output
+#
+# We create XDMF files where we will store the output and store model information in a .pkl file.
+
+# +
+# Write initial condition(s) to file
+results = dict()
+result_folder = args["outdir"]
+result_folder.mkdir(exist_ok=True, parents=True)
+for species_name, species in model_cur.sc.items:
+    results[species_name] = d.XDMFFile(
+        model_cur.mpi_comm_world, str(result_folder / f"{species_name}.xdmf")
+    )
+    results[species_name].parameters["flush_output"] = True
+    results[species_name].write(model_cur.sc[species_name].u["u"], model_cur.t)
+
+results["A_proj"] = d.XDMFFile(
+    model_cur.mpi_comm_world, str(result_folder / f"A_proj.xdmf")
+)
+results["A_proj"].parameters["flush_output"] = True
+boundary_flux = model_cur.fc["r1 [Aphos (f)]"]
+# results["A_proj"].write(model_cur.fc["r1 [Aphos (f)]"].proj_var["Aphos"], model_cur.t)
+surf_space = d.FunctionSpace(boundary_flux.surface.dolfin_mesh, "CG", 1)
+cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
+results["A_proj"].write(cur_interp, model_cur.t)
+
+model_cur.to_pickle(result_folder / "model_cur.pkl")
+import json
+
+# Dump config to results folder
+(result_folder / "config.json").write_text(
+    json.dumps(
+        {
+            "solver": config_cur.solver.__dict__,
+            "flags": config_cur.flags.__dict__,
+            "reaction_database": config_cur.reaction_database,
+            "mesh_file": str(args["mesh_folder"]),
+            "outdir": str(args["outdir"]),
+            "time_step": args["time_step"],
+            "curRadius": args["curRadius"],
+        }
+    )
+)
+
+# -
+
+# We now run the solver until t reaches final_t, recording the average Aphos concentration at each time point. Then plot the final concentration profile using pyvista.
+
+# +
+# Set loglevel to warning in order not to pollute notebook output
+smart_logger.setLevel(logging.WARNING)
+
+# save integration measure and volume for computing average Aphos at each time step
+dx = d.Measure("dx", domain=model_cur.cc["Cyto"].dolfin_mesh)
+volume = d.assemble(1.0 * dx)
+# Solve
+avg_Aphos = [Aphos.initial_condition]
+while True:
+    logger.info(f"Solve for time step {model_cur.t}")
+    # Solve the system
+    model_cur.monolithic_solve()
+    # Save results for post processing
+    for species_name, species in model_cur.sc.items:
+        results[species_name].write(model_cur.sc[species_name].u["u"], model_cur.t)
+    # results["A_proj"].write(model_cur.fc["r1 [Aphos (f)]"].proj_var["Aphos"], model_cur.t)
+    cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
+    results["A_proj"].write(cur_interp, model_cur.t)
+    # compute average Aphos concentration at each time step
+    int_val = d.assemble(model_cur.sc["Aphos"].u["u"] * dx)
+    avg_Aphos.append(int_val / volume)
+    # End if we've passed the final time
+    if model_cur.t >= model_cur.final_t:
+        break
+# visualization.plot(model_cur.sc["Aphos"].u["u"])
+# -
+
+# We plot the average Aphos over time.
+
+fig, ax = plt.subplots()
+ax.plot(model_cur.tvec, avg_Aphos)
+ax.set_xlabel("Time (s)")
+ax.set_ylabel("Aphos concentration (μM)")
+fig.savefig(result_folder / "avg_Aphos.png")
+np.savetxt(result_folder / "avg_Aphos.txt", avg_Aphos)
+np.savetxt(result_folder / "tvec.txt", model_cur.tvec)
+
+# L2 error
+xvec = d.SpatialCoordinate(cc["Cyto"].dolfin_mesh)
+r = d.sqrt(xvec[0]**2 + xvec[1]**2 + (xvec[2])**2)
+k_kin = kkin.value
+k_p = kp.value
+cT = Atot.value
+D = Aphos.D
+thieleMod = curRadius / np.sqrt(D/k_p)
+C1 = k_kin*cT*curRadius**2/((3*D*(np.sqrt(k_p/D)-(1/curRadius)) + k_kin*curRadius)*np.exp(thieleMod) +
+                             (3*D*(np.sqrt(k_p/D)+(1/curRadius))-k_kin*curRadius)*np.exp(-thieleMod))
+sol = C1*(d.exp(r/np.sqrt(D/k_p))-d.exp(-r/np.sqrt(D/k_p)))/r
+L2norm = d.assemble((sol-model_cur.sc["Aphos"].u["u"])**2 *dx)
+np.savetxt(result_folder / "L2norm.txt", np.array([L2norm]))
+
+logger.info("Done with solve loop")
+timer.stop()
+timings = d.timings(
+    d.TimingClear.keep,
+    [d.TimingType.wall, d.TimingType.user, d.TimingType.system],
+).str(True)
+
+print(timings)
+
+(result_folder / "timings.txt").write_text(timings)
