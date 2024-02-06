@@ -140,6 +140,7 @@ def phosphorylation_example(
     curRadius: float,
     axisymmetric: bool,
     no_enforce_mass_conservation: bool = False,
+    diffusion: float = 10.0,
     dry_run: bool = False,
     submit_ex3: bool = False,
     submit_saga: bool = False,
@@ -152,6 +153,8 @@ def phosphorylation_example(
         time_step,
         "--curRadius",
         curRadius,
+        "--diffusion",
+        diffusion,
     ]
     if axisymmetric:
         args.append("--axisymmetric")

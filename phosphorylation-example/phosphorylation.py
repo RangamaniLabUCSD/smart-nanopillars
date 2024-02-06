@@ -127,7 +127,7 @@ cc.add([PM, Cyto])
 # - group (opt): for larger models, specifies a group of species this belongs to;
 #             for organizational purposes when there are multiple reaction modules
 
-Aphos = Species("Aphos", 0.1, vol_unit, 10.0, D_unit, "Cyto")
+Aphos = Species("Aphos", 0.1, vol_unit, args["diffusion"], D_unit, "Cyto")
 
 # Create a species container.
 
@@ -310,6 +310,7 @@ import json
             "outdir": str(args["outdir"]),
             "time_step": args["time_step"],
             "curRadius": args["curRadius"],
+            "diffusion": args["diffusion"],
         }
     )
 )

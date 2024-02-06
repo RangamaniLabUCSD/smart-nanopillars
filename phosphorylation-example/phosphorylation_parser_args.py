@@ -23,6 +23,12 @@ def add_phosphorylation_arguments(parser: argparse.ArgumentParser) -> None:
         default=1.0,
     )
     parser.add_argument(
+        "--diffusion",
+        type=float,
+        default=10.0,
+        help="Diffusion coefficient"
+    )
+    parser.add_argument(
         "--axisymmetric",
         action="store_true",
         default=False,
