@@ -50,12 +50,12 @@ def add_mechanotransduction_arguments(parser: argparse.ArgumentParser) -> None:
         "--e-val",
         type=float,
         default=7e7,
-    )
+    ) # stiffness for glass coverslip
     parser.add_argument(
         "--z-cutoff",
         type=float,
-        default=7e7,
-    )
+        default=1e-4,
+    ) # stimulation only below z-cutoff
     parser.add_argument(
         "--axisymmetric",
         action="store_true",
