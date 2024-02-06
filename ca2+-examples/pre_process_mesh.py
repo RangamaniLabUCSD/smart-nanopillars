@@ -3,7 +3,7 @@ import argparse
 import dolfin as d
 
 from smart import mesh_tools
-import ca2_parser_args
+import dendritic_spine_args
 
 def main(input_mesh_file, output_mesh_file, num_refinements):
     if not Path(input_mesh_file).is_file():
@@ -51,6 +51,6 @@ def main(input_mesh_file, output_mesh_file, num_refinements):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    ca2_parser_args.add_preprocess_spine_mesh_arguments(parser)
+    dendritic_spine_args.add_preprocess_spine_mesh_arguments(parser)
     args = vars(parser.parse_args())
     raise SystemExit(main(**args))
