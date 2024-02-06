@@ -1,69 +1,29 @@
 # # Create meshes
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 1.0 --num-refinements 0 --mesh-folder meshes-phosphorylation/curRadius_1_refined_0
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 2.0 --num-refinements 0 --mesh-folder meshes-phosphorylation/curRadius_2_refined_0
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 4.0 --num-refinements 0 --mesh-folder meshes-phosphorylation/curRadius_4_refined_0
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 6.0 --num-refinements 0 --mesh-folder meshes-phosphorylation/curRadius_6_refined_0
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 8.0 --num-refinements 0 --mesh-folder meshes-phosphorylation/curRadius_8_refined_0
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 10.0 --num-refinements 0 --mesh-folder meshes-phosphorylation/curRadius_10_refined_0
+# for radius in 1.0 2.0 4.0 6.0 8.0 10.0
+# do
+#     for refinement in 0 1 2
+#     do
+#         python3 main.py --dry-run phosphorylation-preprocess --curRadius $radius --num-refinements $refinement --mesh-folder "meshes-phosphorylation/curRadius_${radius}_refined_${refinement}"
+#     done
+# done
 
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 1.0 --num-refinements 1 --mesh-folder meshes-phosphorylation/curRadius_1_refined_1
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 2.0 --num-refinements 1 --mesh-folder meshes-phosphorylation/curRadius_2_refined_1
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 4.0 --num-refinements 1 --mesh-folder meshes-phosphorylation/curRadius_4_refined_1
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 6.0 --num-refinements 1 --mesh-folder meshes-phosphorylation/curRadius_6_refined_1
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 8.0 --num-refinements 1 --mesh-folder meshes-phosphorylation/curRadius_8_refined_1
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 10.0 --num-refinements 1 --mesh-folder meshes-phosphorylation/curRadius_10_refined_1
+# Diffusion and Refinements
+for radius in 1.0 2.0 4.0 6.0 8.0 10.0
+do
+    for refinement in 0 1 2
+    do
+        for diffusion in 0.01, 0.1, 1, 10, 100
+        do
+            python3 main.py --dry-run phosphorylation-preprocess --diffusion $diffusion --curRadius $radius --num-refinements $refinement --mesh-folder "meshes-phosphorylation/curRadius_${radius}_refined_${refinement}"
+        done
+    done
+done
 
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 1.0 --num-refinements 2 --mesh-folder meshes-phosphorylation/curRadius_1_refined_2
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 2.0 --num-refinements 2 --mesh-folder meshes-phosphorylation/curRadius_2_refined_2
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 4.0 --num-refinements 2 --mesh-folder meshes-phosphorylation/curRadius_4_refined_2
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 6.0 --num-refinements 2 --mesh-folder meshes-phosphorylation/curRadius_6_refined_2
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 8.0 --num-refinements 2 --mesh-folder meshes-phosphorylation/curRadius_8_refined_2
-# python3 main.py preprocess-phosphorylation-mesh --curRadius 10.0 --num-refinements 2 --mesh-folder meshes-phosphorylation/curRadius_10_refined_2
-
-# Basic case
-python3 main.py --submit-ex3 phosphorylation --curRadius 1.0 --mesh-folder meshes-phosphorylation/curRadius_1_refined_0 
-python3 main.py --submit-ex3 phosphorylation --curRadius 2.0 --mesh-folder meshes-phosphorylation/curRadius_2_refined_0 
-python3 main.py --submit-ex3 phosphorylation --curRadius 4.0 --mesh-folder meshes-phosphorylation/curRadius_4_refined_0 
-python3 main.py --submit-ex3 phosphorylation --curRadius 6.0 --mesh-folder meshes-phosphorylation/curRadius_6_refined_0 
-python3 main.py --submit-ex3 phosphorylation --curRadius 8.0 --mesh-folder meshes-phosphorylation/curRadius_8_refined_0 
-python3 main.py --submit-ex3 phosphorylation --curRadius 10.0 --mesh-folder meshes-phosphorylation/curRadius_10_refined_0 
-
-# dt = 0.005
-python3 main.py --submit-ex3 phosphorylation --time-step 0.005 --curRadius 1.0 --mesh-folder meshes-phosphorylation/curRadius_1_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.005 --curRadius 2.0 --mesh-folder meshes-phosphorylation/curRadius_2_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.005 --curRadius 4.0 --mesh-folder meshes-phosphorylation/curRadius_4_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.005 --curRadius 6.0 --mesh-folder meshes-phosphorylation/curRadius_6_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.005 --curRadius 8.0 --mesh-folder meshes-phosphorylation/curRadius_8_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.005 --curRadius 10.0 --mesh-folder meshes-phosphorylation/curRadius_10_refined_0
-
-# dt = 0.0025
-python3 main.py --submit-ex3 phosphorylation --time-step 0.0025 --curRadius 1.0 --mesh-folder meshes-phosphorylation/curRadius_1_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.0025 --curRadius 2.0 --mesh-folder meshes-phosphorylation/curRadius_2_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.0025 --curRadius 4.0 --mesh-folder meshes-phosphorylation/curRadius_4_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.0025 --curRadius 6.0 --mesh-folder meshes-phosphorylation/curRadius_6_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.0025 --curRadius 8.0 --mesh-folder meshes-phosphorylation/curRadius_8_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.0025 --curRadius 10.0 --mesh-folder meshes-phosphorylation/curRadius_10_refined_0
-
-# dt = 0.001
-python3 main.py --submit-ex3 phosphorylation --time-step 0.001 --curRadius 1.0 --mesh-folder meshes-phosphorylation/curRadius_1_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.001 --curRadius 2.0 --mesh-folder meshes-phosphorylation/curRadius_2_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.001 --curRadius 4.0 --mesh-folder meshes-phosphorylation/curRadius_4_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.001 --curRadius 6.0 --mesh-folder meshes-phosphorylation/curRadius_6_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.001 --curRadius 8.0 --mesh-folder meshes-phosphorylation/curRadius_8_refined_0
-python3 main.py --submit-ex3 phosphorylation --time-step 0.001 --curRadius 10.0 --mesh-folder meshes-phosphorylation/curRadius_10_refined_0
-
-# Refinement 1
-python3 main.py --submit-ex3 phosphorylation --curRadius 1.0 --mesh-folder meshes-phosphorylation/curRadius_1_refined_1 
-python3 main.py --submit-ex3 phosphorylation --curRadius 2.0 --mesh-folder meshes-phosphorylation/curRadius_2_refined_1 
-python3 main.py --submit-ex3 phosphorylation --curRadius 4.0 --mesh-folder meshes-phosphorylation/curRadius_4_refined_1 
-python3 main.py --submit-ex3 phosphorylation --curRadius 6.0 --mesh-folder meshes-phosphorylation/curRadius_6_refined_1 
-python3 main.py --submit-ex3 phosphorylation --curRadius 8.0 --mesh-folder meshes-phosphorylation/curRadius_8_refined_1 
-python3 main.py --submit-ex3 phosphorylation --curRadius 10.0 --mesh-folder meshes-phosphorylation/curRadius_10_refined_1 
-
-# Refinement 2
-python3 main.py --submit-ex3 phosphorylation --curRadius 1.0 --mesh-folder meshes-phosphorylation/curRadius_1_refined_2 
-python3 main.py --submit-ex3 phosphorylation --curRadius 2.0 --mesh-folder meshes-phosphorylation/curRadius_2_refined_2 
-python3 main.py --submit-ex3 phosphorylation --curRadius 4.0 --mesh-folder meshes-phosphorylation/curRadius_4_refined_2 
-python3 main.py --submit-ex3 phosphorylation --curRadius 6.0 --mesh-folder meshes-phosphorylation/curRadius_6_refined_2 
-python3 main.py --submit-ex3 phosphorylation --curRadius 8.0 --mesh-folder meshes-phosphorylation/curRadius_8_refined_2 
-python3 main.py --submit-ex3 phosphorylation --curRadius 10.0 --mesh-folder meshes-phosphorylation/curRadius_10_refined_2 
+# Time steps
+for radius in 1.0 2.0 4.0 6.0 8.0 10.0
+do
+    for timestep in 0.005 0.0025 .001
+    do
+        python3 main.py --dry-run phosphorylation-preprocess --time-step $timestep --curRadius $radius --mesh-folder "meshes-phosphorylation/curRadius_${radius}_refined_0"
+    done
+done
