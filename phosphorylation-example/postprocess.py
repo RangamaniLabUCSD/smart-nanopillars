@@ -31,6 +31,10 @@ class Data(NamedTuple):
     @property
     def dt(self):
         return self.config["time_step"]
+
+    @property
+    def diffusion(self):
+        return self.config.get("diffusion", 10.0)
     
     @property
     def timings(self):
