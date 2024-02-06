@@ -119,7 +119,7 @@ def preprocess_phosphorylation_mesh(
         args.append("--axisymmetric")
 
     script = (
-        (here / ".." / ".." / "phosphorylation-example" / "pre_process_mesh.py")
+        (here / ".." / "phosphorylation-example" / "pre_process_mesh.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -163,7 +163,7 @@ def phosphorylation_example(
         args.extend(["--outdir", Path(outdir).as_posix()])
 
     script = (
-        (here / ".." / ".." / "phosphorylation-example" / "phosphorylation.py")
+        (here / ".." / "phosphorylation-example" / "phosphorylation.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -200,7 +200,7 @@ def postprocess_phosphorylation(
     if use_tex:
         args.append("--use-tex")
     script = (
-        (here / ".." / ".." / "phosphorylation-example" / "postprocess.py")
+        (here / ".." / "phosphorylation-example" / "postprocess.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -237,7 +237,7 @@ def preprocess_mito_mesh(
     ]
 
     script = (
-        (here / ".." / ".." / "mito-example" / "pre_process_mesh.py")
+        (here / ".." / "mito-example" / "pre_process_mesh.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -318,7 +318,7 @@ def pre_preprocess_mech_mesh(
     ]
 
     script = (
-        (here / ".." / ".." / "mechanotransduction-example" / "pre_process_mesh.py")
+        (here / ".." / "mechanotransduction-example" / "pre_process_mesh.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -367,7 +367,7 @@ def mechanotransduction_example(
         args.extend(["--outdir", Path(outdir).as_posix()])
 
     script = (
-        (here / ".." / ".." / "mechanotransduction-example" / "mechanotransduction.py")
+        (here / ".." / "mechanotransduction-example" / "mechanotransduction.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -392,7 +392,7 @@ def postprocess_mechanotransduction(
         Path(output_folder).as_posix(),
     ]
     script = (
-        (here / ".." / ".." / "mechanotransduction-example" / "postprocess.py")
+        (here / ".." / "mechanotransduction-example" / "postprocess.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -423,7 +423,7 @@ def preprocess_spine_mesh(
     ]
 
     script = (
-        (here / ".." / ".." / "ca2+-examples" / "pre_process_mesh.py")
+        (here / ".." / "ca2+-examples" / "pre_process_mesh.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -460,7 +460,7 @@ def dendritic_spine_example(
         args.extend(["--outdir", Path(outdir).as_posix()])
 
     script = (
-        (here / ".." / ".." / "ca2+-examples" / "dendritic_spine.py")
+        (here / ".." / "ca2+-examples" / "dendritic_spine.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -478,7 +478,7 @@ def dendritic_spine_example(
 def convert_notebooks(dry_run: bool = False, **kwargs):
     import jupytext
 
-    for example_folder in (here / ".." / "..").iterdir():
+    for example_folder in (here / "..").iterdir():
         # Only look in folders that contains the word example
         if "example" not in example_folder.stem:
             continue
