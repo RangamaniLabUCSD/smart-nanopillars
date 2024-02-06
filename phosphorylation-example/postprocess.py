@@ -9,6 +9,7 @@
 # $$
 from typing import NamedTuple, Dict, Any
 from pathlib import Path
+import pandas as pd
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,6 +22,7 @@ class Data(NamedTuple):
     ss: np.ndarray
     l2: np.ndarray
     config: Dict[str, Any]
+    timings_: Dict[str, Any]
 
     @property
     def radius(self):
@@ -29,6 +31,10 @@ class Data(NamedTuple):
     @property
     def dt(self):
         return self.config["time_step"]
+    
+    @property
+    def timings(self):
+        return pd.DataFrame(self.timings_)
 
     @property
     def refinement(self):
@@ -43,8 +49,22 @@ class Data(NamedTuple):
             "ss": self.ss.tolist(),
             "l2": float(self.l2),
             "config": self.config,
+            "timings_": self.timings_
         }
 
+def parse_timings(timings: str) -> Dict[str, Any]:
+    f = lambda x: len(x) > 0 and "|" not in x
+
+    header = list(map(str.strip, filter(f, timings.splitlines()[0].split("  "))))
+    header[0] = "name"
+    
+    data = []
+    for item_str in timings.splitlines()[2:]:  
+        item = list(map(str.strip, filter(f, item_str.split("  "))))
+        data.append(dict(zip(header, item)))
+
+    data.append(dict(zip(header, item)))
+    return data
 
 def load_results(folder):
     data = []
@@ -57,7 +77,8 @@ def load_results(folder):
         t = np.loadtxt(result_folder / "tvec.txt")
         ss = np.loadtxt(result_folder / "avg_Aphos.txt")
         l2 = np.loadtxt(result_folder / "L2norm.txt")
-        data.append(Data(t=t, ss=ss, l2=l2, config=config))
+        timings = parse_timings((result_folder / "timings.txt").read_text())
+        data.append(Data(t=t, ss=ss, l2=l2, config=config, timings_=timings))
         print(data[-1])
 
     if len(data) == 0:
@@ -137,6 +158,16 @@ def plot_error_analytical_solution_different_radius(all_results, output_folder, 
     ax.set_title("Percent $\ell^2$ error from analytical solution")
     fig.savefig((output_folder / "percent_error_radius_l2.png").with_suffix(f".{format}"))
     plt.close(fig)
+
+    # Plot timings
+    total_run_time = [float(result.timings[result.timings["name"] == "phosphorylation-example"].iloc[0]["wall tot"]) for result in results]
+    fig, ax = plt.subplots()
+    ax.plot(radiusVec, total_run_time, marker="o")
+    ax.set_xlabel("Cell radius (μm)")
+    ax.set_ylabel("Total run time [s]")
+    fig.savefig((output_folder / "total_time_radius.png").with_suffix(f".{format}"))
+    plt.close(fig)
+
    
 
 
@@ -144,6 +175,7 @@ def plot_error_different_refinements(all_results, output_folder, format):
     radii = sorted({r.radius for r in all_results})
     fig, ax = plt.subplots()
     fig_l2, ax_l2 = plt.subplots()
+    fig_time, ax_time = plt.subplots()
     for radius in radii:
         print(radius)
         results = list(
@@ -163,6 +195,11 @@ def plot_error_different_refinements(all_results, output_folder, format):
         ax_l2.semilogy(refinements, l2, marker="o", label=radius)
         ax_l2.set_xticks(refinements)
 
+        total_run_time = [float(result.timings[result.timings["name"] == "phosphorylation-example"].iloc[0]["wall tot"]) for result in results]
+        ax_time.semilogy(refinements, total_run_time, marker="o", label=radius)
+        ax_time.set_xticks(refinements)
+
+
 
     ax.legend(title="Radius")
     ax.set_xlabel("Refinement")
@@ -172,15 +209,21 @@ def plot_error_different_refinements(all_results, output_folder, format):
 
     ax_l2.set_xlabel("Refinement")
     ax_l2.set_ylabel("$ \| u_e - u \|^2$")
-    ax_l2.set_title("Percent $\ell^2$ error from analytical solution")
     fig_l2.savefig((output_folder / "percent_error_refinement_l2.png").with_suffix(f".{format}"))
     plt.close(fig_l2)
+
+    ax_time.legend(title="Radius")
+    ax_time.set_xlabel("Refinement")
+    ax_time.set_ylabel("Total run time [s]")
+    fig_time.savefig((output_folder / "total_time_refinement").with_suffix(f".{format}"))
+    plt.close(fig)
 
 
 def plot_error_different_timesteps(all_results, output_folder, format):
     radii = sorted({r.radius for r in all_results})
     fig, ax = plt.subplots()
     fig_l2, ax_l2 = plt.subplots()
+    fig_time, ax_time = plt.subplots()
     for radius in radii:
         print(radius)
         results = list(
@@ -200,6 +243,10 @@ def plot_error_different_timesteps(all_results, output_folder, format):
         ax_l2.semilogy(dts, l2, marker="o", label=radius)
         ax_l2.set_xticks(dts)
 
+        total_run_time = [float(result.timings[result.timings["name"] == "phosphorylation-example"].iloc[0]["wall tot"]) for result in results]
+        ax_time.semilogy(dts, total_run_time, marker="o", label=radius)
+        ax_time.set_xticks(dts)
+
     ax.legend(title="Radius")
     ax.set_xlabel("Time step [s]")
     ax.set_ylabel("Percent error from analytical solution")
@@ -208,9 +255,14 @@ def plot_error_different_timesteps(all_results, output_folder, format):
 
     ax_l2.set_xlabel("Time step [s]")
     ax_l2.set_ylabel("$ \| u_e - u \|^2$")
-    ax_l2.set_title("Percent $\ell^2$ error from analytical solution")
     fig_l2.savefig((output_folder / "percent_error_timestep_l2.png").with_suffix(f".{format}"))
     plt.close(fig_l2)
+
+    ax_time.legend(title="Radius")
+    ax_time.set_xlabel("Time step [s]")
+    ax_time.set_ylabel("Total run time [s]")
+    fig_time.savefig((output_folder / "total_time_timestep").with_suffix(f".{format}"))
+    plt.close(fig)
 
    
 def main(results_folder: Path, output_folder: Path, format: str = "png", skip_if_processed: bool = False, use_tex: bool = False) -> int:
