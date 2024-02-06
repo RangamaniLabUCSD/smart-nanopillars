@@ -14,7 +14,7 @@ root = tk.Tk()
 root.withdraw()
 
 def analyze_all(mesh_file="", results_path="", display=True, axisymm=False, 
-                subdomain=[], ind_files=True):
+                subdomain=[], ind_files=False):
     """
     Function for post-processing of XDMF files written from SMART simulations
     Currently relies on loading in the hdf5 file that stores the dolfin mesh
@@ -108,7 +108,7 @@ def analyze_all(mesh_file="", results_path="", display=True, axisymm=False,
             results_stored.append([])
             continue
         find_mesh = len(test_array) == np.array(child_mesh_len)
-        if len(np.nonzero(find_mesh)[0]) > 1:
+        if len(np.nonzero(find_mesh)[0]) != 1:
             ValueError("Could not identify submesh")
         else:
             cur_mesh = child_meshes[np.nonzero(find_mesh)[0][0]]

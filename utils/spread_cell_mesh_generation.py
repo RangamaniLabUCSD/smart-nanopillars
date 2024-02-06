@@ -398,6 +398,7 @@ def create_2Dcell(
     return_curvature: bool = False,
     axisymm: bool = True,
     use_tmp: bool = False,
+    nanopillar: bool = False,
 ) -> Tuple[d.Mesh, d.MeshFunction, d.MeshFunction]:
     """
     Creates a 2D mesh of a cell profile, with the bounding curve defined in
@@ -423,6 +424,7 @@ def create_2Dcell(
         verbose: If true print gmsh output, else skip
         half_cell: If true, consider r=0 the symmetry axis for an axisymm shape
         use_tmp: argument to use tmp directory for gmsh file creation
+        nanopillar: if true, add a central nanopillar 
     Returns:
         Tuple (mesh, facet_marker, cell_marker)
     """
@@ -472,12 +474,36 @@ def create_2Dcell(
         outer_spline_tag2 = gmsh.model.occ.add_spline(outer_tag_list2)
     if np.isclose(zValsOuter[-1], 0):  # then include substrate at z=0
         if half_cell:
-            origin_tag = gmsh.model.occ.add_point(0, 0, 0)
-            symm_axis_tag = gmsh.model.occ.add_line(origin_tag, outer_tag_list[0])
-            bottom_tag = gmsh.model.occ.add_line(origin_tag, outer_tag_list[-1])
-            outer_loop_tag = gmsh.model.occ.add_curve_loop(
-                [outer_spline_tag, bottom_tag, symm_axis_tag]
-            )
+            if nanopillar:
+                contact_tag = gmsh.model.occ.add_point(0.3, 0, 0)
+                nanopillar_tag_list = [contact_tag]
+                xCur = 0.3
+                zCur = 0.0
+                thetaCur = 0.0
+                while xCur > 0:
+                    if zCur < 3.0:
+                        zCur += 0.01
+                    else:
+                        thetaCur += np.pi/20
+                        zCur = 3.0 + 0.3*np.sin(thetaCur)
+                        xCur = 0.3*np.cos(thetaCur)
+                    cur_tag = gmsh.model.occ.add_point(xCur, 0, zCur)
+                    nanopillar_tag_list.append(cur_tag)
+                left_tag = gmsh.model.occ.add_point(0, 0, 3.3)
+                nanopillar_tag_list.append(left_tag)
+                nanopillar_spline_tag = gmsh.model.occ.add_spline(nanopillar_tag_list)
+                symm_axis_tag = gmsh.model.occ.add_line(left_tag, outer_tag_list[0])
+                bottom_tag = gmsh.model.occ.add_line(contact_tag, outer_tag_list[-1])
+                outer_loop_tag = gmsh.model.occ.add_curve_loop(
+                    [outer_spline_tag, bottom_tag, nanopillar_spline_tag, symm_axis_tag]
+                )
+            else:
+                origin_tag = gmsh.model.occ.add_point(0, 0, 0)
+                symm_axis_tag = gmsh.model.occ.add_line(origin_tag, outer_tag_list[0])
+                bottom_tag = gmsh.model.occ.add_line(origin_tag, outer_tag_list[-1])
+                outer_loop_tag = gmsh.model.occ.add_curve_loop(
+                    [outer_spline_tag, bottom_tag, symm_axis_tag]
+                )
         else:
             bottom_tag = gmsh.model.occ.add_line(outer_tag_list[-1], outer_tag_list2[-1])
             outer_loop_tag = gmsh.model.occ.add_curve_loop(
@@ -513,13 +539,42 @@ def create_2Dcell(
     else:
         # Add inner shape
         inner_tag_list = []
+        if nanopillar:
+            logical_idx = np.logical_or(rValsInner > 0.4, zValsInner > 3.4)
+            rValsInner = rValsInner[logical_idx]
+            zValsInner = zValsInner[logical_idx]
+            rValsInner = np.append(rValsInner, 0.4)
+            zValsInner = np.append(zValsInner, zValsInner[-1])
         for i in range(len(rValsInner)):
             cur_tag = gmsh.model.occ.add_point(rValsInner[i], 0, zValsInner[i])
             inner_tag_list.append(cur_tag)
         inner_spline_tag = gmsh.model.occ.add_spline(inner_tag_list)
         if half_cell:
-            symm_inner_tag = gmsh.model.occ.add_line(inner_tag_list[0], inner_tag_list[-1])
-            inner_loop_tag = gmsh.model.occ.add_curve_loop([inner_spline_tag, symm_inner_tag])
+            if nanopillar:
+                contact_tag = gmsh.model.occ.add_point(0.4, 0, zValsInner[-1])
+                nanopillar_tag_list = [contact_tag]
+                xCur = 0.4
+                zCur = zValsInner[-1]
+                thetaCur = 0.0
+                while xCur > 0:
+                    if zCur < 3.0:
+                        zCur += 0.01
+                    else:
+                        thetaCur += np.pi/20
+                        zCur = 3.0 + 0.4*np.sin(thetaCur)
+                        xCur = 0.4*np.cos(thetaCur)
+                    cur_tag = gmsh.model.occ.add_point(xCur, 0, zCur)
+                    nanopillar_tag_list.append(cur_tag)
+                left_tag = gmsh.model.occ.add_point(0, 0, 3.4)
+                nanopillar_tag_list.append(left_tag)
+                nanopillar_spline_tag_inner = gmsh.model.occ.add_spline(nanopillar_tag_list)
+                symm_inner_tag = gmsh.model.occ.add_line(left_tag, inner_tag_list[0])
+                inner_loop_tag = gmsh.model.occ.add_curve_loop(
+                    [inner_spline_tag, nanopillar_spline_tag_inner, symm_inner_tag]
+                )
+            else:
+                symm_inner_tag = gmsh.model.occ.add_line(inner_tag_list[0], inner_tag_list[-1])
+                inner_loop_tag = gmsh.model.occ.add_curve_loop([inner_spline_tag, symm_inner_tag])
         else:
             inner_tag_list2 = []
             for i in range(len(rValsInner)):
@@ -613,7 +668,7 @@ def create_2Dcell(
             lcTest = lc1 + (lc2 - lc1) * (dist_to_outer) / (dist_to_inner + dist_to_outer)
         else:
             lcTest = lc2 + (lc3 - lc2) * (1 - R_rel_inner)
-        return lcTest
+        return 0.2#lcTest
 
     gmsh.model.mesh.setSizeCallback(meshSizeCallback)
     # set off the other options for mesh size determination
