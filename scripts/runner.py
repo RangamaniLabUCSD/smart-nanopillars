@@ -416,6 +416,75 @@ def postprocess_mechanotransduction(
     )
 
 
+def preprocess_cru_mesh(
+    input_mesh_file: Path,
+    output_mesh_file: Path,
+    dry_run: bool,
+    num_refinements: int,
+    **kwargs,
+):
+    args = [
+        "--input-mesh-file",
+        Path(input_mesh_file).as_posix(),
+        "--output-mesh-file",
+        Path(output_mesh_file).as_posix(),
+        "--num-refinements",
+        num_refinements,
+    ]
+
+    script = (
+        (here / ".." / "ca2+-examples" / "pre_process_mesh_cru.py")
+        .absolute()
+        .resolve()
+        .as_posix()
+    )
+    run(
+        args=args,
+        dry_run=dry_run,
+        script=script,
+        submit_ex3=False,
+        submit_saga=False,
+    )
+
+
+def cru_example(
+    mesh_file: Path,
+    outdir: Path,
+    time_step: float,
+    enforce_mass_conservation: bool,
+    dry_run: bool = False,
+    submit_ex3: bool = False,
+    submit_saga: bool = False,
+    **kwargs,
+):
+    args = [
+        "--mesh-file",
+        Path(mesh_file).as_posix(),
+        "--time-step",
+        time_step,
+    ]
+    if enforce_mass_conservation:
+        args.append("--enforce-mass-conservation")
+
+    if submit_ex3 is False and submit_saga is False:
+        args.extend(["--outdir", Path(outdir).as_posix()])
+
+    script = (
+        (here / ".." / "ca2+-examples" / "cru.py")
+        .absolute()
+        .resolve()
+        .as_posix()
+    )
+    run(
+        job_name="cru",
+        args=args,
+        dry_run=dry_run,
+        script=script,
+        submit_ex3=submit_ex3,
+        submit_saga=submit_saga,
+    )
+
+
 def preprocess_spine_mesh(
     input_mesh_file: Path,
     output_mesh_file: Path,
