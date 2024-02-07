@@ -50,12 +50,12 @@ def add_mechanotransduction_arguments(parser: argparse.ArgumentParser) -> None:
         "--e-val",
         type=float,
         default=7e7,
-    )
+    ) # stiffness for glass coverslip
     parser.add_argument(
         "--z-cutoff",
         type=float,
-        default=7e7,
-    )
+        default=1e-4,
+    ) # stimulation only below z-cutoff
     parser.add_argument(
         "--axisymmetric",
         action="store_true",
@@ -85,3 +85,10 @@ def add_preprocess_mech_mesh_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--hEdge", type=float, default=0.6)
     parser.add_argument("--hInnerEdge", type=float, default=0.6)
     parser.add_argument("--num-refinements", type=int, default=0)
+
+
+def add_mechanotransduction_postprocess_arguments(
+    parser: argparse.ArgumentParser,
+) -> None:
+    parser.add_argument("-i", "--results-folder", type=Path, default="./results")
+    parser.add_argument("-o", "--output-folder", type=Path, default="./")
