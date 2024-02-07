@@ -668,7 +668,7 @@ def create_2Dcell(
             lcTest = lc1 + (lc2 - lc1) * (dist_to_outer) / (dist_to_inner + dist_to_outer)
         else:
             lcTest = lc2 + (lc3 - lc2) * (1 - R_rel_inner)
-        return 0.2#lcTest
+        return lcTest
 
     gmsh.model.mesh.setSizeCallback(meshSizeCallback)
     # set off the other options for mesh size determination
