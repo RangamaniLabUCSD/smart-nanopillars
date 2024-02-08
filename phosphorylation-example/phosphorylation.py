@@ -325,7 +325,11 @@ smart_logger.setLevel(logging.WARNING)
 
 # save integration measure and volume for computing average Aphos at each time step
 dx = d.Measure("dx", domain=model_cur.cc["Cyto"].dolfin_mesh)
-volume = d.assemble(1.0 * dx)
+if args["axisymmetric"]:
+    x = d.SpatialCoordinate(model_cur.cc['Cyto'].dolfin_mesh)
+    volume = d.assemble(1.0*x[0]*dx)
+else:
+    volume = d.assemble(1.0 * dx)
 # Solve
 avg_Aphos = [Aphos.initial_condition]
 while True:
@@ -339,7 +343,10 @@ while True:
     cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
     results["A_proj"].write(cur_interp, model_cur.t)
     # compute average Aphos concentration at each time step
-    int_val = d.assemble(model_cur.sc["Aphos"].u["u"] * dx)
+    if args["axisymmetric"]:
+        int_val = d.assemble(x[0]*model_cur.sc['Aphos'].u['u']*dx)
+    else:
+        int_val = d.assemble(model_cur.sc["Aphos"].u["u"] * dx)
     avg_Aphos.append(int_val / volume)
     # End if we've passed the final time
     if model_cur.t >= model_cur.final_t:
@@ -359,7 +366,10 @@ np.savetxt(result_folder / "tvec.txt", model_cur.tvec)
 
 # L2 error
 xvec = d.SpatialCoordinate(cc["Cyto"].dolfin_mesh)
-r = d.sqrt(xvec[0]**2 + xvec[1]**2 + (xvec[2])**2)
+if args["axisymmetric"]:
+    r = d.sqrt(xvec[0]**2 + xvec[1]**2 + (xvec[2]-(curRadius+1))**2)
+else:
+    r = d.sqrt(xvec[0]**2 + xvec[1]**2 + (xvec[2])**2)
 k_kin = kkin.value
 k_p = kp.value
 cT = Atot.value
