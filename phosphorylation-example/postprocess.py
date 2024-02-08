@@ -155,7 +155,7 @@ def plot_error_analytical_solution_different_radius(all_results, output_folder, 
                     for result in results
                 ]
               
-                ax_steady.plot(radiusVec, ss_vec, linestyle=":", marker="o", label=f"refinement {refinement}")
+                ax_steady.plot(radiusVec, ss_vec, linestyle=":", marker="o", label=f"SMART simulation (refinement: {refinement})")
                 ax_percent.plot(radiusVec, percentError, label=f"refinement {refinement}") 
                 ax_l2.semilogy(radiusVec, l2, label=f"refinement {refinement}")        
                 rmse = np.sqrt(np.mean(percentError**2))
@@ -164,12 +164,13 @@ def plot_error_analytical_solution_different_radius(all_results, output_folder, 
 
             radiusTest = np.logspace(0, 1, 100)
             cA_smooth = analytical_solution(radiusTest,  D=diffusion)
-            ax_steady.plot(radiusTest, cA_smooth)
+            ax_steady.plot(radiusTest, cA_smooth, label="Analytical solution")
             
            
             ax_l2.set_xlabel("Cell radius (μm)")
             ax_l2.set_ylabel("$ \| u_e - u \|^2$")
             ax_l2.set_title("Percent $\ell^2$ error from analytical solution")
+            ax_l2.legend()
             fig_l2.savefig(
                 (output_folder / f"error_radius_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
             )
@@ -178,18 +179,20 @@ def plot_error_analytical_solution_different_radius(all_results, output_folder, 
             
             ax_time.set_xlabel("Cell radius (μm)")
             ax_time.set_ylabel("Total run time [s]")
+            ax_time.legend()
             fig_time.savefig(output_folder / f"total_time_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
             plt.close(fig_time)
 
 
             ax_steady.set_xlabel("Cell radius (μm)")
             ax_steady.set_ylabel("Steady state concentration (μM)")
-            ax_steady.legend(("SMART simulation", "Analytical solution"))
+            ax_steady.legend()
             fig_steady.savefig(output_folder / f"steady_state_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
             plt.close(fig_steady)
 
             ax_percent.set_xlabel("Cell radius (μm)")
             ax_percent.set_ylabel("Percent error from analytical solution")
+            ax_percent.legend()
             fig_percent.savefig(output_folder / f"percent_error_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
             plt.close(fig_percent)
 
