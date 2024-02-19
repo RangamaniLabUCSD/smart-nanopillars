@@ -97,10 +97,10 @@ def load_results(folder):
 
 
 def analytical_solution(radius, D=10.0):
-    thieleMod = radius / 1.0
     k_kin = 50
     k_p = 10
     cT = 1
+    thieleMod = radius / np.sqrt(D/k_p)
     C1 = (
         k_kin
         * cT
@@ -169,7 +169,7 @@ def plot_error_analytical_solution_different_radius(all_results, output_folder, 
            
             ax_l2.set_xlabel("Cell radius (μm)")
             ax_l2.set_ylabel("$ \| u_e - u \|^2$")
-            ax_l2.set_title("Percent $\ell^2$ error from analytical solution")
+            ax_l2.set_title("$\ell^2$ error from analytical solution")
             ax_l2.legend()
             fig_l2.savefig(
                 (output_folder / f"error_radius_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
@@ -252,7 +252,7 @@ def plot_error_different_refinements(all_results, output_folder, format):
             ax_l2.set_xlabel("Refinement")
             ax_l2.set_ylabel("$ \| u_e - u \|^2$")
             fig_l2.savefig(
-                (output_folder / f"percent_error_refinement_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
+                (output_folder / f"error_refinement_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
             )
             plt.close(fig_l2)
 
