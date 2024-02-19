@@ -24,6 +24,11 @@ def add_run_cru_arguments(parser: argparse.ArgumentParser) -> None:
         action='store_true',
         default=True,
     )
+    parser.add_argument(
+        "--serca",
+        action='store_true',
+        default=True,
+    )
 
 
 def add_preprocess_cru_mesh_arguments(parser: argparse.ArgumentParser) -> None:

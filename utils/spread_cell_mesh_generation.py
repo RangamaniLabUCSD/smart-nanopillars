@@ -25,6 +25,7 @@ def create_3dcell(
     nanopillars: Tuple[float, float, float] = "",
     thetaExpr: str = "",
     use_tmp: bool = False,
+    roughness: Tuple[float, float] = [0, 0]
 ) -> Tuple[d.Mesh, d.MeshFunction, d.MeshFunction]:
     """
     Creates a 3d cell mesh.
@@ -68,6 +69,7 @@ def create_3dcell(
         return_curvature: If true, return curvatures as a vertex mesh function
         nanopillars: tuple with nanopillar radius, height, spacing
         thetaExpr: String defining the theta dependence of the outer shape
+        roughness: Tuple defining roughness parameters for pm and nm
     Returns:
         Tuple (mesh, facet_marker, cell_marker)
     Or, if return_curvature = True, Returns:
@@ -162,6 +164,8 @@ def create_3dcell(
     all_points_list = [top_point]
     if thetaExpr != "":
         # define theta dependence
+        rand_rough = np.random.rand(20,20)
+        rand_rough_neg = np.random.rand(20,20)
         for j in range(len(thetaVec)):
             if j == (len(thetaVec)-1):
                 outer_spline_list.append(outer_spline_list[0])
@@ -180,10 +184,37 @@ def create_3dcell(
                         yValSmooth =rValsOuter[i]*scaleVecSmooth[j]*np.sin(thetaVec[j])
                         zScale1 = (zMax - zValsOuter[i])/zMax
                         zScale2 = zValsOuter[i]/zMax
-                        cur_tag = gmsh.model.occ.add_point(
-                            zScale1*xValRef + zScale2*xValSmooth, 
-                            zScale1*yValRef + zScale2*yValSmooth, 
-                            zValsOuter[i])
+                        xCur, yCur, zCur = (zScale1*xValRef + zScale2*xValSmooth, 
+                                            zScale1*yValRef + zScale2*yValSmooth, 
+                                            zValsOuter[i])
+                        if roughness[0] > 0:
+                            # define deformation field over surface from smooth function
+                            max_wavelength = 5.0
+                            zDev = 0
+                            for m in range(20):
+                                for n in range(20):
+                                    xArg = 2*np.pi*xCur*(m+1)/max_wavelength
+                                    yArg = 2*np.pi*yCur*(n+1)/max_wavelength
+                                    u1 = 1#rand_rough[m,n]
+                                    u2 = np.sqrt(1 - u1**2)
+                                    curMag = 2*roughness[0] / ((m+1)**2 + (n+1)**2) 
+                                    zDev = zDev + curMag * (u1 * (np.cos(xArg)*np.cos(yArg) + np.sin(xArg)*np.sin(yArg)) +
+                                                            u2 * (np.sin(xArg)*np.cos(yArg) + np.cos(xArg)*np.sin(yArg)))
+                                    xArg_neg = 2*np.pi*xCur*(-m-1)/max_wavelength
+                                    yArg_neg = 2*np.pi*yCur*(-n-1)/max_wavelength
+                                    u1_neg = 1#rand_rough_neg[m,n]
+                                    u2_neg = np.sqrt(1 - u1**2)
+                                    zDev = zDev + curMag * (u1_neg * (np.cos(xArg_neg)*np.cos(yArg_neg) + np.sin(xArg_neg)*np.sin(yArg_neg)) +
+                                                            u2_neg * (np.sin(xArg_neg)*np.cos(yArg_neg) + np.cos(xArg_neg)*np.sin(yArg_neg)))
+                            # dev_vec = roughness[0] * np.random.randn(1)
+                            # xCur = xCur + dev_vec[0]
+                            # yCur = yCur + dev_vec[1]
+                            if i == len(rValsOuter)-1:
+                                zCur = 0
+                            else:
+                                zCur = max(zCur + zDev, 0) # z cannot be less than zero
+                        
+                        cur_tag = gmsh.model.occ.add_point(xCur, yCur, zCur)
                         outer_tag_list.append(cur_tag)
                         all_points_list.append(cur_tag)
                 outer_spline_list.append(gmsh.model.occ.add_spline(outer_tag_list))

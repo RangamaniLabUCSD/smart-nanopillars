@@ -452,6 +452,7 @@ def cru_example(
     outdir: Path,
     time_step: float,
     enforce_mass_conservation: bool,
+    serca: bool,
     dry_run: bool = False,
     submit_ex3: bool = False,
     submit_saga: bool = False,
