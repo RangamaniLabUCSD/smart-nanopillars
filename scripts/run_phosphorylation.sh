@@ -1,20 +1,20 @@
 # # Create meshes
-# for radius in 1 2 4 6 8 10
-# do
-#     for refinement in 0 1 2
-#     do
-#         python3 main.py phosphorylation-preprocess --curRadius $radius --mesh-folder "meshes-phosphorylation/curRadius_${radius}_refined_${refinement}"
-#     done
-# done
+for radius in 1 2 4 6 8 10
+do
+    for refinement in 0 1 2
+    do
+        python3 main.py phosphorylation-preprocess --curRadius $radius --mesh-folder "meshes-phosphorylation/curRadius_${radius}_refined_${refinement}"
+    done
+done
 
 # # Create axisymmetric meshes
-# for radius in 1 2 4 6 8 10
-# do
-#     for refinement in 0 1 2
-#     do
-#         python3 main.py phosphorylation-preprocess --axisymmetric --curRadius $radius --num-refinements $refinement --mesh-folder "meshes-phosphorylation/curRadius_${radius}_axisymmetric_refined_${refinement}"
-#     done
-# done
+for radius in 1 2 4 6 8 10
+do
+    for refinement in 0 1 2
+    do
+        python3 main.py phosphorylation-preprocess --axisymmetric --curRadius $radius --num-refinements $refinement --mesh-folder "meshes-phosphorylation/curRadius_${radius}_axisymmetric_refined_${refinement}"
+    done
+done
 
 # Diffusion, Refinements
 for radius in 1 2 4 6 8 10
