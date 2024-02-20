@@ -376,6 +376,7 @@ timings = d.timings(
     d.TimingClear.keep,
     [d.TimingType.wall, d.TimingType.user, d.TimingType.system],
 ).str(True)
+(result_folder / f"timings_rank{model_cur.mpi_comm_world.rank}.txt").write_text(timings)
 print(timings)
 
 if model_cur.mpi_comm_world.size > 1:
