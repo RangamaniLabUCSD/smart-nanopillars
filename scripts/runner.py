@@ -25,7 +25,7 @@ mkdir -p ${{SCRATCH_DIRECTORY}}
 echo "Scratch directory: ${{SCRATCH_DIRECTORY}}"
 
 echo 'Run command: python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}'
-srun -n {ntasks} python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}
+mpirun -n {ntasks} python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}
 # Move log file to results folder
 mv ${{SLURM_JOBID}}-* ${{SCRATCH_DIRECTORY}}
 """
