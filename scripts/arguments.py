@@ -90,10 +90,20 @@ def setup_parser() -> argparse.ArgumentParser:
         help="Add this flag if you want to submit the job on the ex3 cluster",
     )
     parser.add_argument(
-        "--submit-saga",
-        action="store_true",
-        help="Add this flag if you want to submit the job on the saga cluster",
+        "-n",
+        "--ntasks",
+        default=1,
+        type=int,
+        help="Number of cores to use when submitting to the cluster",
     )
+    parser.add_argument(
+        "-p",
+        "--partition",
+        default="defq",
+        type=str,
+        help="Which partition to use on the cluster",
+    )
+
 
     subparsers = parser.add_subparsers(dest="command")
 

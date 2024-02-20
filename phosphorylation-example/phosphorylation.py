@@ -254,7 +254,6 @@ model_cur = model.Model(pc, sc, cc, rc, config_cur, parent_mesh)
 config_cur.flags.update(
     {
         "axisymmetric_model": args["axisymmetric"],
-        "enforce_mass_conservation": not args["no_enforce_mass_conservation"],
     }
 )
 config_cur.solver.update(
@@ -327,9 +326,9 @@ smart_logger.setLevel(logging.WARNING)
 dx = d.Measure("dx", domain=model_cur.cc["Cyto"].dolfin_mesh)
 if args["axisymmetric"]:
     x = d.SpatialCoordinate(model_cur.cc['Cyto'].dolfin_mesh)
-    volume = d.assemble(1.0*x[0]*dx)
+    volume = d.assemble_mixed(1.0*x[0]*dx)
 else:
-    volume = d.assemble(1.0 * dx)
+    volume = d.assemble_mixed(1.0 * dx)
 # Solve
 avg_Aphos = [Aphos.initial_condition]
 while True:
@@ -344,9 +343,9 @@ while True:
     results["A_proj"].write(cur_interp, model_cur.t)
     # compute average Aphos concentration at each time step
     if args["axisymmetric"]:
-        int_val = d.assemble(x[0]*model_cur.sc['Aphos'].u['u']*dx)
+        int_val = d.assemble_mixed(x[0]*model_cur.sc['Aphos'].u['u']*dx)
     else:
-        int_val = d.assemble(model_cur.sc["Aphos"].u["u"] * dx)
+        int_val = d.assemble_mixed(model_cur.sc["Aphos"].u["u"] * dx)
     avg_Aphos.append(int_val / volume)
     # End if we've passed the final time
     if model_cur.t >= model_cur.final_t:
@@ -378,7 +377,7 @@ thieleMod = curRadius / np.sqrt(D/k_p)
 C1 = k_kin*cT*curRadius**2/((3*D*(np.sqrt(k_p/D)-(1/curRadius)) + k_kin*curRadius)*np.exp(thieleMod) +
                              (3*D*(np.sqrt(k_p/D)+(1/curRadius))-k_kin*curRadius)*np.exp(-thieleMod))
 sol = C1*(d.exp(r/np.sqrt(D/k_p))-d.exp(-r/np.sqrt(D/k_p)))/r
-L2norm = d.assemble((sol-model_cur.sc["Aphos"].u["u"])**2 *dx)
+L2norm = d.assemble_mixed((sol-model_cur.sc["Aphos"].u["u"])**2 *dx)
 np.savetxt(result_folder / "L2norm.txt", np.array([L2norm]))
 
 logger.info("Done with solve loop")
