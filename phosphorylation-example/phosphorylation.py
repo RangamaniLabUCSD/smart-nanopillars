@@ -254,7 +254,6 @@ model_cur = model.Model(pc, sc, cc, rc, config_cur, parent_mesh)
 config_cur.flags.update(
     {
         "axisymmetric_model": args["axisymmetric"],
-        "enforce_mass_conservation": not args["no_enforce_mass_conservation"],
     }
 )
 config_cur.solver.update(
@@ -283,37 +282,37 @@ for species_name, species in model_cur.sc.items:
     results[species_name] = d.XDMFFile(
         model_cur.mpi_comm_world, str(result_folder / f"{species_name}.xdmf")
     )
-    results[species_name].parameters["flush_output"] = True
     results[species_name].write(model_cur.sc[species_name].u["u"], model_cur.t)
 
 results["A_proj"] = d.XDMFFile(
     model_cur.mpi_comm_world, str(result_folder / f"A_proj.xdmf")
 )
-results["A_proj"].parameters["flush_output"] = True
 boundary_flux = model_cur.fc["r1 [Aphos (f)]"]
-# results["A_proj"].write(model_cur.fc["r1 [Aphos (f)]"].proj_var["Aphos"], model_cur.t)
 surf_space = d.FunctionSpace(boundary_flux.surface.dolfin_mesh, "CG", 1)
 cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
 results["A_proj"].write(cur_interp, model_cur.t)
 
-model_cur.to_pickle(result_folder / "model_cur.pkl")
-import json
 
-# Dump config to results folder
-(result_folder / "config.json").write_text(
-    json.dumps(
-        {
-            "solver": config_cur.solver.__dict__,
-            "flags": config_cur.flags.__dict__,
-            "reaction_database": config_cur.reaction_database,
-            "mesh_file": str(args["mesh_folder"]),
-            "outdir": str(args["outdir"]),
-            "time_step": args["time_step"],
-            "curRadius": args["curRadius"],
-            "diffusion": args["diffusion"],
-        }
+# model_cur.to_pickle(result_folder / "model_cur.pkl")
+
+if model_cur.mpi_comm_world.rank == 0:
+    import json
+
+    # Dump config to results folder
+    (result_folder / "config.json").write_text(
+        json.dumps(
+            {
+                "solver": config_cur.solver.__dict__,
+                "flags": config_cur.flags.__dict__,
+                "reaction_database": config_cur.reaction_database,
+                "mesh_file": str(args["mesh_folder"]),
+                "outdir": str(args["outdir"]),
+                "time_step": args["time_step"],
+                "curRadius": args["curRadius"],
+                "diffusion": args["diffusion"],
+            }
+        )
     )
-)
 
 # -
 
@@ -327,11 +326,12 @@ smart_logger.setLevel(logging.WARNING)
 dx = d.Measure("dx", domain=model_cur.cc["Cyto"].dolfin_mesh)
 if args["axisymmetric"]:
     x = d.SpatialCoordinate(model_cur.cc['Cyto'].dolfin_mesh)
-    volume = d.assemble(1.0*x[0]*dx)
+    volume = d.assemble_mixed(1.0*x[0]*dx)
 else:
-    volume = d.assemble(1.0 * dx)
+    volume = d.assemble_mixed(1.0 * dx)
 # Solve
 avg_Aphos = [Aphos.initial_condition]
+
 while True:
     logger.info(f"Solve for time step {model_cur.t}")
     # Solve the system
@@ -344,25 +344,15 @@ while True:
     results["A_proj"].write(cur_interp, model_cur.t)
     # compute average Aphos concentration at each time step
     if args["axisymmetric"]:
-        int_val = d.assemble(x[0]*model_cur.sc['Aphos'].u['u']*dx)
+        int_val = d.assemble_mixed(x[0]*model_cur.sc['Aphos'].u['u']*dx)
     else:
-        int_val = d.assemble(model_cur.sc["Aphos"].u["u"] * dx)
+        int_val = d.assemble_mixed(model_cur.sc["Aphos"].u["u"] * dx)
     avg_Aphos.append(int_val / volume)
     # End if we've passed the final time
     if model_cur.t >= model_cur.final_t:
         break
 # visualization.plot(model_cur.sc["Aphos"].u["u"])
 # -
-
-# We plot the average Aphos over time.
-
-fig, ax = plt.subplots()
-ax.plot(model_cur.tvec, avg_Aphos)
-ax.set_xlabel("Time (s)")
-ax.set_ylabel("Aphos concentration (μM)")
-fig.savefig(result_folder / "avg_Aphos.png")
-np.savetxt(result_folder / "avg_Aphos.txt", avg_Aphos)
-np.savetxt(result_folder / "tvec.txt", model_cur.tvec)
 
 # L2 error
 xvec = d.SpatialCoordinate(cc["Cyto"].dolfin_mesh)
@@ -378,8 +368,7 @@ thieleMod = curRadius / np.sqrt(D/k_p)
 C1 = k_kin*cT*curRadius**2/((3*D*(np.sqrt(k_p/D)-(1/curRadius)) + k_kin*curRadius)*np.exp(thieleMod) +
                              (3*D*(np.sqrt(k_p/D)+(1/curRadius))-k_kin*curRadius)*np.exp(-thieleMod))
 sol = C1*(d.exp(r/np.sqrt(D/k_p))-d.exp(-r/np.sqrt(D/k_p)))/r
-L2norm = d.assemble((sol-model_cur.sc["Aphos"].u["u"])**2 *dx)
-np.savetxt(result_folder / "L2norm.txt", np.array([L2norm]))
+L2norm = d.assemble_mixed((sol-model_cur.sc["Aphos"].u["u"])**2 *dx)
 
 logger.info("Done with solve loop")
 timer.stop()
@@ -387,7 +376,20 @@ timings = d.timings(
     d.TimingClear.keep,
     [d.TimingType.wall, d.TimingType.user, d.TimingType.system],
 ).str(True)
-
+(result_folder / f"timings_rank{model_cur.mpi_comm_world.rank}.txt").write_text(timings)
 print(timings)
 
-(result_folder / "timings.txt").write_text(timings)
+if model_cur.mpi_comm_world.size > 1:
+    d.MPI.comm_world.Barrier()
+
+if model_cur.mpi_comm_world.rank == 0: 
+    # We plot the average Aphos over time.
+    fig, ax = plt.subplots()
+    ax.plot(model_cur.tvec, avg_Aphos)
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Aphos concentration (μM)")
+    fig.savefig(result_folder / "avg_Aphos.png")
+    np.savetxt(result_folder / "avg_Aphos.txt", avg_Aphos)
+    np.savetxt(result_folder / "tvec.txt", model_cur.tvec)
+    np.savetxt(result_folder / "L2norm.txt", np.array([L2norm]))
+    (result_folder / "timings.txt").write_text(timings)

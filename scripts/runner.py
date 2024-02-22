@@ -6,15 +6,15 @@ import subprocess as sp
 ex3_template = dedent(
     """#!/bin/bash
 #SBATCH --job-name="{job_name}"
-#SBATCH --partition=fpgaq
+#SBATCH --partition={partition}
 #SBATCH --time=3-00:00:00
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --ntasks-per-node=1
+#SBATCH --ntasks={ntasks}
 #SBATCH --output=%j-%x-stdout.txt
 #SBATCH --error=%j-%x-stderr.txt
 
+module purge
 module use /cm/shared/ex3-modules/latest/modulefiles
+module load slurm
 module load  gcc-10.1.0
 module load libgfortran-5.0.0
 . /home/henriknf/local/src/spack/share/spack/setup-env.sh
@@ -25,39 +25,11 @@ mkdir -p ${{SCRATCH_DIRECTORY}}
 echo "Scratch directory: ${{SCRATCH_DIRECTORY}}"
 
 echo 'Run command: python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}'
-python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}
+mpirun -n {ntasks} python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}
 # Move log file to results folder
 mv ${{SLURM_JOBID}}-* ${{SCRATCH_DIRECTORY}}
 """
 )
-
-saga_template = dedent(
-    """#!/bin/bash
-#SBATCH --job-name="{job_name}"
-#SBATCH --account=nn9249k
-#SBATCH --time=3-00:00:00
-#SBATCH --mem-per-cpu=4G
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --ntasks-per-node=1
-#SBATCH --output=%j-%x-stdout.txt
-#SBATCH --error=%j-%x-stderr.txt
-
-
-source /cluster/shared/fenics/conf/fenics-2019.2.0.dev0-2023-05-24.saga.foss-2022a-py3.10.conf
-
-SUBMIT_DIRECTORY=/cluster/home/henriknf/local/src/smart-comp-sci/ex3_scripts
-SCRATCH_DIRECTORY=${{SUBMIT_DIRECTORY}}/results/{job_name}/${{SLURM_JOBID}}
-mkdir -p ${{SCRATCH_DIRECTORY}}
-echo "Scratch directory: ${{SCRATCH_DIRECTORY}}"
-
-echo 'Run command: python3 {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}'
-srun python3 {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}
-# Move log file to results folder
-mv ${{SUBMIT_DIRECTORY}}/${{SLURM_JOBID}}-* ${{SCRATCH_DIRECTORY}}
-"""
-)
-
 
 here = Path(__file__).parent.absolute()
 
@@ -67,8 +39,9 @@ def run(
     dry_run: bool,
     script: str,
     submit_ex3: bool,
-    submit_saga: bool,
     job_name: str = "",
+    ntasks: int = 1,
+    partition: str = "defq",
 ):
     args = list(map(str, args))
     args_str = " ".join(args)
@@ -78,8 +51,6 @@ def run(
 
     if submit_ex3:
         template = ex3_template
-    elif submit_saga:
-        template = saga_template
     else:
         sp.run([sys.executable, script, *args])
         return
@@ -90,6 +61,8 @@ def run(
             job_name=job_name,
             script=script,
             args=args_str,
+            ntasks=ntasks,
+            partition=partition,
         )
     )
     sp.run(["sbatch", job_file.as_posix()])
@@ -129,7 +102,6 @@ def preprocess_phosphorylation_mesh(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
-        submit_saga=False,
     )
 
 
@@ -143,7 +115,8 @@ def phosphorylation_example(
     diffusion: float = 10.0,
     dry_run: bool = False,
     submit_ex3: bool = False,
-    submit_saga: bool = False,
+    ntasks: int = 1,
+    partition: str = "defq",
     **kwargs,
 ):
     args = [
@@ -162,7 +135,7 @@ def phosphorylation_example(
     if no_enforce_mass_conservation:
         args.append("--no-enforce-mass-conservation")
 
-    if submit_ex3 is False and submit_saga is False:
+    if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
 
     script = (
@@ -177,7 +150,8 @@ def phosphorylation_example(
         dry_run=dry_run,
         script=script,
         submit_ex3=submit_ex3,
-        submit_saga=submit_saga,
+        ntasks=ntasks,
+        partition=partition,
     )
 
 
@@ -213,7 +187,6 @@ def postprocess_phosphorylation(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
-        submit_saga=False,
     )
 
 
@@ -250,7 +223,6 @@ def preprocess_mito_mesh(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
-        submit_saga=False,
     )
 
 
@@ -263,7 +235,8 @@ def mito_example(
     enforce_mass_conservation: bool,
     dry_run: bool = False,
     submit_ex3: bool = False,
-    submit_saga: bool = False,
+    ntasks: int = 1,
+    partition: str = "defq",
     **kwargs,
 ):
     args = [
@@ -294,7 +267,8 @@ def mito_example(
         dry_run=dry_run,
         script=script,
         submit_ex3=submit_ex3,
-        submit_saga=submit_saga,
+        ntasks=ntasks,
+        partition=partition,
     )
 
 
@@ -331,7 +305,6 @@ def pre_preprocess_mech_mesh(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
-        submit_saga=False,
     )
 
 
@@ -346,7 +319,8 @@ def mechanotransduction_example(
     no_enforce_mass_conservation: bool = False,
     dry_run: bool = False,
     submit_ex3: bool = False,
-    submit_saga: bool = False,
+    ntasks: int = 1,
+    partition: str = "defq",
     **kwargs,
 ):
     args = [
@@ -366,7 +340,7 @@ def mechanotransduction_example(
     if no_enforce_mass_conservation:
         args.append("--no-enforce-mass-conservation")
 
-    if submit_ex3 is False and submit_saga is False:
+    if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
 
     script = (
@@ -381,7 +355,8 @@ def mechanotransduction_example(
         dry_run=dry_run,
         script=script,
         submit_ex3=submit_ex3,
-        submit_saga=submit_saga,
+        ntasks=ntasks,
+        partition=partition,
     )
 
 
@@ -405,7 +380,6 @@ def postprocess_mechanotransduction(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
-        submit_saga=False,
     )
 
 
@@ -436,7 +410,6 @@ def preprocess_spine_mesh(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
-        submit_saga=False,
     )
 
 
@@ -447,7 +420,8 @@ def dendritic_spine_example(
     enforce_mass_conservation: bool,
     dry_run: bool = False,
     submit_ex3: bool = False,
-    submit_saga: bool = False,
+    ntasks: int = 1,
+    partition: str = "defq",
     **kwargs,
 ):
     args = [
@@ -459,7 +433,7 @@ def dendritic_spine_example(
     if enforce_mass_conservation:
         args.append("--enforce-mass-conservation")
 
-    if submit_ex3 is False and submit_saga is False:
+    if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
 
     script = (
@@ -474,7 +448,8 @@ def dendritic_spine_example(
         dry_run=dry_run,
         script=script,
         submit_ex3=submit_ex3,
-        submit_saga=submit_saga,
+        ntasks=ntasks,
+        partition=partition,
     )
 
 

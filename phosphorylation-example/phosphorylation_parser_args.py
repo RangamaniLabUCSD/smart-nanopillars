@@ -33,11 +33,6 @@ def add_phosphorylation_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         default=False,
     )
-    parser.add_argument(
-        "--no-enforce-mass-conservation",
-        action="store_true",
-        default=True,
-    )
 
 
 def add_phosphorylation_preprocess_arguments(
