@@ -20,6 +20,20 @@ def preprocess_spine_mesh(parser: argparse.ArgumentParser):
     dendritic_spine_args.add_preprocess_spine_mesh_arguments(parser)
 
 
+def cru_example(parser: argparse.ArgumentParser):
+    sys.path.insert(0, (here / ".." / "ca2+-examples").as_posix())
+    import cru_args
+
+    cru_args.add_run_cru_arguments(parser)
+
+
+def preprocess_cru_mesh(parser: argparse.ArgumentParser):
+    sys.path.insert(0, (here / ".." / "ca2+-examples").as_posix())
+    import cru_args
+
+    cru_args.add_preprocess_cru_mesh_arguments(parser)
+
+
 def mechanotransduction_example(parser: argparse.ArgumentParser):
     sys.path.insert(0, (here / ".." / "mechanotransduction-example").as_posix())
     import mech_parser_args
@@ -120,6 +134,17 @@ def setup_parser() -> argparse.ArgumentParser:
         "dendritic-spine", help="Run dendritic spine example"
     )
     dendritic_spine_example(dendritic_spine_parser)
+
+    # CRU (calcium release unit)
+    preprocess_cru_mesh_parser = subparsers.add_parser(
+        "cru-preprocess", help="Preprocess mesh for CRU example"
+    )
+    preprocess_cru_mesh(preprocess_cru_mesh_parser)
+
+    cru_parser = subparsers.add_parser(
+        "cru", help="Run CRU example"
+    )
+    cru_example(cru_parser)
 
     # Mechanotransduction example
     preprocess_spine_mesh_parser = subparsers.add_parser(

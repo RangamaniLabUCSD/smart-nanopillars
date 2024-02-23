@@ -6,7 +6,8 @@ from smart import mesh_tools
 import mito_parser_args
 import numpy as np
 
-def main(input_mesh_file, output_mesh_file, input_curv_file, output_curv_file, num_refinements):
+def main(input_mesh_file, output_mesh_file, input_curv_file, 
+         output_curv_file, num_refinements, single_compartment_im=False):
     if not Path(input_mesh_file).is_file():
         raise FileNotFoundError(f"File {input_mesh_file} does not exist")
     
@@ -14,6 +15,10 @@ def main(input_mesh_file, output_mesh_file, input_curv_file, output_curv_file, n
     mito_mesh = d.Mesh(Path(input_mesh_file).as_posix())
     cell_markers = d.MeshFunction("size_t", mito_mesh, 3, mito_mesh.domains())
     facet_markers = d.MeshFunction("size_t", mito_mesh, 2, mito_mesh.domains())
+
+    if single_compartment_im:
+        facet_markers.array()[np.where(facet_markers.array()==11)[0]] = 12
+        print(f"Remove cristae markers, single compartment im is {single_compartment_im}")
 
     # if num_refinements > 0:
     #     print(
