@@ -30,10 +30,6 @@ def add_run_mito_arguments(parser: argparse.ArgumentParser) -> None:
         default=0,
     )
     parser.add_argument(
-        "--enforce-mass-conservation",
-        action='store_true'
-    )
-    parser.add_argument(
         "--D",
         type=float,
         default=15.0
