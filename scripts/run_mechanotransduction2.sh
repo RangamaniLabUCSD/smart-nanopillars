@@ -1,10 +1,8 @@
 if [ $IDX -gt 9 ]
 then
     full3d=true
-    np=8
 else
     full3d=false
-    np=2
 fi
 idx=$(((IDX-1) % 9 + 1))
 echo $idx

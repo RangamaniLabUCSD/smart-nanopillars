@@ -1,5 +1,7 @@
 _build
 meshes/
+*.sbatch
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
