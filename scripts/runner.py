@@ -111,7 +111,6 @@ def phosphorylation_example(
     time_step: float,
     curRadius: float,
     axisymmetric: bool,
-    no_enforce_mass_conservation: bool = False,
     diffusion: float = 10.0,
     dry_run: bool = False,
     submit_ex3: bool = False,
@@ -131,9 +130,6 @@ def phosphorylation_example(
     ]
     if axisymmetric:
         args.append("--axisymmetric")
-
-    if no_enforce_mass_conservation:
-        args.append("--no-enforce-mass-conservation")
 
     if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
@@ -236,7 +232,6 @@ def mito_example(
     outdir: Path,
     time_step: float,
     curv_dep: float,
-    enforce_mass_conservation: bool,
     D: float,
     dry_run: bool = False,
     submit_ex3: bool = False,
@@ -256,8 +251,6 @@ def mito_example(
         "--D",
         D,
     ]
-    if enforce_mass_conservation:
-        args.append("--enforce-mass-conservation")
 
     if not submit_ex3:
         args.extend(["--outdir", Path(outdir).as_posix()])
@@ -323,7 +316,6 @@ def mechanotransduction_example(
     z_cutoff: float,
     axisymmetric: bool,
     well_mixed: bool,
-    no_enforce_mass_conservation: bool = False,
     dry_run: bool = False,
     submit_ex3: bool = False,
     ntasks: int = 1,
@@ -344,8 +336,6 @@ def mechanotransduction_example(
         args.append("--axisymmetric")
     if well_mixed:
         args.append("--well-mixed")
-    if no_enforce_mass_conservation:
-        args.append("--no-enforce-mass-conservation")
 
     if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
@@ -425,7 +415,6 @@ def cru_example(
     mesh_file: Path,
     outdir: Path,
     time_step: float,
-    enforce_mass_conservation: bool,
     serca: bool,
     dry_run: bool = False,
     submit_ex3: bool = False,
@@ -438,8 +427,6 @@ def cru_example(
         "--time-step",
         time_step,
     ]
-    if enforce_mass_conservation:
-        args.append("--enforce-mass-conservation")
 
     if submit_ex3 is False and submit_saga is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
@@ -494,7 +481,6 @@ def dendritic_spine_example(
     mesh_file: Path,
     outdir: Path,
     time_step: float,
-    enforce_mass_conservation: bool,
     dry_run: bool = False,
     submit_ex3: bool = False,
     ntasks: int = 1,
@@ -507,8 +493,6 @@ def dendritic_spine_example(
         "--time-step",
         time_step,
     ]
-    if enforce_mass_conservation:
-        args.append("--enforce-mass-conservation")
 
     if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])

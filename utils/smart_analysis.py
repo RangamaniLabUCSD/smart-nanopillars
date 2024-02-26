@@ -93,9 +93,9 @@ def analyze_all(mesh_file="", results_path="", display=True, axisymm=False,
     child_mesh_len = []
     for i in range(len(cell_vals)+len(facet_vals)):
         if i < len(cell_vals):
-            mesh = d.MeshView.create(mf_cell, cell_vals[i])
+            mesh = d.create_meshview(mf_cell, cell_vals[i])
         else:
-            mesh = d.MeshView.create(mf_facet, facet_vals[i-len(cell_vals)])
+            mesh = d.create_meshview(mf_facet, facet_vals[i-len(cell_vals)])
         child_meshes.append(mesh)
         child_mesh_len.append(len(mesh.coordinates()))
 
@@ -135,9 +135,9 @@ def analyze_all(mesh_file="", results_path="", display=True, axisymm=False,
         dof_map = d.dof_to_vertex_map(Vcur)[:]
         if axisymm:
             x_cur = d.SpatialCoordinate(cur_mesh)[0]
-            vol_cur = d.assemble(x_cur*dx_cur(1))
+            vol_cur = d.assemble_mixed(x_cur*dx_cur(1))
         else:
-            vol_cur = d.assemble(1.0*dx_cur(1))
+            vol_cur = d.assemble_mixed(1.0*dx_cur(1))
         
         var_avg = []
 
@@ -155,12 +155,12 @@ def analyze_all(mesh_file="", results_path="", display=True, axisymm=False,
                 if vol_cur == 0:
                     var_avg.append(np.nan)
                 else:
-                    var_avg.append(d.assemble(dvec*x_cur*dx_cur(1))/vol_cur)
+                    var_avg.append(d.assemble_mixed(dvec*x_cur*dx_cur(1))/vol_cur)
             else:
                 if vol_cur == 0:
                     var_avg.append(np.nan)
                 else:
-                    var_avg.append(d.assemble(dvec*dx_cur(1))/vol_cur)
+                    var_avg.append(d.assemble_mixed(dvec*dx_cur(1))/vol_cur)
             print(f"Done with time step {i} for file {j}")
 
         results_stored.append(var_avg)

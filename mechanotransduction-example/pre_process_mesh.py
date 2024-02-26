@@ -78,13 +78,17 @@ def main(
     hEdge: float = 0.6,
     hInnerEdge: float = 0.6,
     num_refinements: int = 0,
+    full_3d = False,
 ):
     here = Path(__file__).parent.absolute()
     sys.path.append((here / ".." / "utils").as_posix())
 
     import spread_cell_mesh_generation as mesh_gen
 
-    sym_fraction = shape2symfraction(shape)
+    if full_3d:
+        sym_fraction = 1
+    else:
+        sym_fraction = shape2symfraction(shape)
 
     # initialize current mesh
     if sym_fraction == 0:

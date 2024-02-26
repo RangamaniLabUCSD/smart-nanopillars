@@ -66,11 +66,6 @@ def add_mechanotransduction_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         default=False,
     )
-    parser.add_argument(
-        "--no-enforce-mass-conservation",
-        action="store_true",
-        default=False,
-    )
 
 
 def add_preprocess_mech_mesh_arguments(parser: argparse.ArgumentParser) -> None:
@@ -85,6 +80,7 @@ def add_preprocess_mech_mesh_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--hEdge", type=float, default=0.6)
     parser.add_argument("--hInnerEdge", type=float, default=0.6)
     parser.add_argument("--num-refinements", type=int, default=0)
+    parser.add_argument("--full-3d", action="store_true", default=False)
 
 
 def add_mechanotransduction_postprocess_arguments(
