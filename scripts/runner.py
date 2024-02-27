@@ -31,6 +31,36 @@ mv ${{SLURM_JOBID}}-* ${{SCRATCH_DIRECTORY}}
 """
 )
 
+tscc_template = dedent(
+    """#!/bin/bash
+#SBATCH --job-name="{job_name}"
+#SBATCH --partition=condo
+#SBATCH --time=100:00:00
+#SBATCH --ntasks={ntasks}
+#SBATCH --output=%j-%x-stdout.txt
+#SBATCH --error=%j-%x-stderr.txt
+#SBATCH --account=csd786
+#SBATCH --qos=condo
+
+module load singularitypro/3.11
+module load mpich/ge/gcc/64/3.4.2
+cd /tscc/nfs/home/eafrancis/gitrepos/smart-comp-sci/scripts
+
+SCRATCH_DIRECTORY=/tscc/lustre/ddn/scratch/eafrancis/smart-comp-sci-data/{job_name}
+mkdir -p ${{SCRATCH_DIRECTORY}}
+echo "Scratch directory: ${{SCRATCH_DIRECTORY}}"
+
+echo 'Run command in container: python {script} {args}'
+singularity exec --bind $HOME:/root/shared,\
+$TMPDIR:/root/tmp,$SCRATCH_DIRECTORY:/root/scratch \
+/tscc/nfs/home/eafrancis/smart-newmeshview.sif \
+python3 {script} {args}
+
+# Move log file to results folder
+mv ${{SLURM_JOBID}}-* ${{SCRATCH_DIRECTORY}}
+"""
+)
+
 here = Path(__file__).parent.absolute()
 
 
@@ -39,6 +69,7 @@ def run(
     dry_run: bool,
     script: str,
     submit_ex3: bool,
+    submit_tscc: bool,
     job_name: str = "",
     ntasks: int = 1,
     partition: str = "defq",
@@ -51,6 +82,8 @@ def run(
 
     if submit_ex3:
         template = ex3_template
+    elif submit_tscc:
+        template = tscc_template
     else:
         sp.run([sys.executable, script, *args])
         return
@@ -102,6 +135,7 @@ def preprocess_phosphorylation_mesh(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
+        submit_tscc=False,
     )
 
 
@@ -114,6 +148,7 @@ def phosphorylation_example(
     diffusion: float = 10.0,
     dry_run: bool = False,
     submit_ex3: bool = False,
+    submit_tscc: bool = False,
     ntasks: int = 1,
     partition: str = "defq",
     **kwargs,
@@ -146,6 +181,7 @@ def phosphorylation_example(
         dry_run=dry_run,
         script=script,
         submit_ex3=submit_ex3,
+        submit_tscc=submit_tscc,
         ntasks=ntasks,
         partition=partition,
     )
@@ -183,6 +219,7 @@ def postprocess_phosphorylation(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
+        submit_tscc=False,
     )
 
 
@@ -223,6 +260,7 @@ def preprocess_mito_mesh(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
+        submit_tscc=False,
     )
 
 
@@ -235,6 +273,7 @@ def mito_example(
     D: float,
     dry_run: bool = False,
     submit_ex3: bool = False,
+    submit_tscc: bool = False,
     ntasks: int = 1,
     partition: str = "defq",
     **kwargs,
@@ -256,7 +295,7 @@ def mito_example(
         args.extend(["--outdir", Path(outdir).as_posix()])
 
     script = (
-        (here / ".."/ ".." / "mito-example" / "mito_atp_dynamics.py")
+        (here / ".." / "mito-example" / "mito_atp_dynamics.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -267,6 +306,7 @@ def mito_example(
         dry_run=dry_run,
         script=script,
         submit_ex3=submit_ex3,
+        submit_tscc=submit_tscc,
         ntasks=ntasks,
         partition=partition,
     )
@@ -279,6 +319,7 @@ def pre_preprocess_mech_mesh(
     hInnerEdge: float,
     num_refinements: int,
     dry_run: bool,
+    full_3d: bool,
     **kwargs,
 ):
     args = [
@@ -294,6 +335,9 @@ def pre_preprocess_mech_mesh(
         num_refinements,
     ]
 
+    if full_3d:
+        args.append("--full-3d")
+
     script = (
         (here / ".." / "mechanotransduction-example" / "pre_process_mesh.py")
         .absolute()
@@ -305,6 +349,7 @@ def pre_preprocess_mech_mesh(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
+        submit_tscc=False,
     )
 
 
@@ -318,6 +363,7 @@ def mechanotransduction_example(
     well_mixed: bool,
     dry_run: bool = False,
     submit_ex3: bool = False,
+    submit_tscc: bool = False,
     ntasks: int = 1,
     partition: str = "defq",
     **kwargs,
@@ -352,6 +398,7 @@ def mechanotransduction_example(
         dry_run=dry_run,
         script=script,
         submit_ex3=submit_ex3,
+        submit_tscc=submit_tscc,
         ntasks=ntasks,
         partition=partition,
     )
@@ -377,6 +424,7 @@ def postprocess_mechanotransduction(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
+        submit_tscc=False,
     )
 
 
@@ -407,7 +455,7 @@ def preprocess_cru_mesh(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
-        submit_saga=False,
+        submit_tscc=False,
     )
 
 
@@ -415,10 +463,10 @@ def cru_example(
     mesh_file: Path,
     outdir: Path,
     time_step: float,
-    serca: bool,
+    no_serca: bool,
     dry_run: bool = False,
     submit_ex3: bool = False,
-    submit_saga: bool = False,
+    submit_tscc: bool = False,
     **kwargs,
 ):
     args = [
@@ -428,7 +476,10 @@ def cru_example(
         time_step,
     ]
 
-    if submit_ex3 is False and submit_saga is False:
+    if no_serca:
+        args.append("--no-serca")
+
+    if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
 
     script = (
@@ -443,7 +494,7 @@ def cru_example(
         dry_run=dry_run,
         script=script,
         submit_ex3=submit_ex3,
-        submit_saga=submit_saga,
+        submit_tscc=submit_tscc,
     )
 
 
@@ -474,6 +525,7 @@ def preprocess_spine_mesh(
         dry_run=dry_run,
         script=script,
         submit_ex3=False,
+        submit_tscc=False,
     )
 
 
@@ -483,6 +535,7 @@ def dendritic_spine_example(
     time_step: float,
     dry_run: bool = False,
     submit_ex3: bool = False,
+    submit_tscc: bool = False,
     ntasks: int = 1,
     partition: str = "defq",
     **kwargs,
@@ -509,6 +562,7 @@ def dendritic_spine_example(
         dry_run=dry_run,
         script=script,
         submit_ex3=submit_ex3,
+        submit_tscc=submit_tscc,
         ntasks=ntasks,
         partition=partition,
     )

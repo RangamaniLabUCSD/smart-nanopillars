@@ -104,6 +104,11 @@ def setup_parser() -> argparse.ArgumentParser:
         help="Add this flag if you want to submit the job on the ex3 cluster",
     )
     parser.add_argument(
+        "--submit-tscc",
+        action="store_true",
+        help="Add this flag if you want to submit the job on the hopper cluster at TSCC",
+    )
+    parser.add_argument(
         "-n",
         "--ntasks",
         default=1,
