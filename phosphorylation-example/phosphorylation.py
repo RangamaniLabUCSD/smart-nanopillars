@@ -56,6 +56,7 @@ smart_logger.setLevel(logging.DEBUG)
 logger = logging.getLogger("example3")
 logger.setLevel(logging.INFO)
 logger.info("Starting phosphorylation example")
+d.parameters["form_compiler"]["quadrature_degree"] = 4 
 
 # -
 

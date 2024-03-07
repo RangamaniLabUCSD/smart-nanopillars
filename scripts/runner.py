@@ -14,11 +14,10 @@ ex3_template = dedent(
 
 module purge
 module use /cm/shared/ex3-modules/latest/modulefiles
-module load slurm
 module load  gcc-10.1.0
 module load libgfortran-5.0.0
 . /home/henriknf/local/src/spack/share/spack/setup-env.sh
-spack env activate fenics-dev-fpqga
+spack env activate fenics-dev-{partition}
 
 SCRATCH_DIRECTORY=/global/D1/homes/${{USER}}/smart-comp-sci/{job_name}/${{SLURM_JOBID}}
 mkdir -p ${{SCRATCH_DIRECTORY}}
