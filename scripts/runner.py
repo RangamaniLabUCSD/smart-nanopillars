@@ -67,14 +67,14 @@ def run(
     args,
     dry_run: bool,
     script: str,
-    submit_ex3: bool,
+    submit_ex3: bool, # FIXME: Change this and next param to enum
     submit_tscc: bool,
     job_name: str = "",
     ntasks: int = 1,
     partition: str = "defq",
 ):
-    args = list(map(str, args))
-    args_str = " ".join(args)
+    in_args = list(map(str, args))
+    args_str = " ".join(in_args)
     if dry_run:
         print(f"Run command: {sys.executable} {script} {args_str}")
         return
@@ -84,7 +84,10 @@ def run(
     elif submit_tscc:
         template = tscc_template
     else:
-        sp.run([sys.executable, script, *args])
+        if ntasks > 1:
+           sp.run([sys.executable, script, *args])
+        else:
+            sp.run(["mpirun", "-n", str(ntasks), sys.executable, script, *in_args])
         return
 
     job_file = Path("tmp_job.sbatch")

@@ -91,38 +91,41 @@ def postprocess_phosphorylation(parser: argparse.ArgumentParser):
 
 
 def setup_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     # Root parser
-    parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Just print the command and do not run it",
-    )
-    parser.add_argument(
-        "--submit-ex3",
-        action="store_true",
-        help="Add this flag if you want to submit the job on the ex3 cluster",
-    )
-    parser.add_argument(
-        "--submit-tscc",
-        action="store_true",
-        help="Add this flag if you want to submit the job on the hopper cluster at TSCC",
-    )
     parser.add_argument(
         "-n",
         "--ntasks",
         default=1,
         type=int,
-        help="Number of cores to use when submitting to the cluster",
+        help="Number of cores to use for each program",
     )
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Just print the command and do not run it",
+    )
+
+
+    cg = parser.add_argument_group("cluster", "Options relevant for clusters")
+    cg.add_argument(
         "-p",
         "--partition",
         default="defq",
         type=str,
         help="Which partition to use on the cluster",
     )
-
+    cluster = cg.add_mutually_exclusive_group()
+    cluster.add_argument(
+        "--submit-ex3",
+        action="store_true",
+        help="Add this flag if you want to submit the job on the ex3 cluster",
+    )
+    cluster.add_argument(
+        "--submit-tscc",
+        action="store_true",
+        help="Add this flag if you want to submit the job on the hopper cluster at TSCC",
+    )
 
     subparsers = parser.add_subparsers(dest="command")
 

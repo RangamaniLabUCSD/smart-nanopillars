@@ -6,7 +6,7 @@ def add_phosphorylation_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--mesh-folder",
         type=Path,
-        default=Path.cwd().parent / "meshes-phosphorylation" / "DemoSphere.h5",
+        default=Path.cwd().parent / "meshes-phosphorylation",
     )
     parser.add_argument(
         "-o", "--outdir", type=Path, default=Path("results_phosphorylation")
