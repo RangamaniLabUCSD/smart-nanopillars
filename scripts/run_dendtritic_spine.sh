@@ -1,13 +1,12 @@
-python3 main.py preprocess-spine-mesh --input-mesh-file /home/henriknf/local/src/smart-comp-sci/meshes_local/1spine_PM10_PSD11_ERM12_cyto1_ER2.xml --output-mesh-file meshes/ellipse1Spine_mesh_0.h5 --num-refinements 0
-python3 main.py preprocess-spine-mesh --input-mesh-file /home/henriknf/local/src/smart-comp-sci/meshes_local/1spine_PM10_PSD11_ERM12_cyto1_ER2.xml --output-mesh-file meshes/ellipse1Spine_mesh_1.h5 --num-refinements 1
-python3 main.py preprocess-spine-mesh --input-mesh-file /home/henriknf/local/src/smart-comp-sci/meshes_local/1spine_PM10_PSD11_ERM12_cyto1_ER2.xml --output-mesh-file meshes/ellipse1Spine_mesh_2.h5 --num-refinements 2
+# Download meshes at https://zenodo.org/records/10480304
+python3 main.py dendritic-spine-preprocess --input-mesh-file 1spine_PM10_PSD11_ERM12_cyto1_ER2_coarser.xml --output-mesh-file 1spine_mesh_coarser.h5 --num-refinements 0
+python3 main.py dendritic-spine-preprocess --input-mesh-file 1spine_PM10_PSD11_ERM12_cyto1_ER2.xml --output-mesh-file 1spine_mesh.h5 --num-refinements 0
+python3 main.py dendritic-spine-preprocess --input-mesh-file 2spine_PM10_PSD11_ERM12_cyto1_ER2.xml --output-mesh-file 2spine_mesh.h5 --num-refinements 0
+
 # # Base case
-python3 main.py --submit-ex3 dendritic-spine --mesh-file meshes/ellipse1Spine_mesh_0.h5  --time-step 0.0002
-# # Run spatial convergence
-python3 main.py --submit-ex3 dendritic-spine --mesh-file meshes/ellipse1Spine_mesh_1.h5 --time-step 0.0002
-python3 main.py --submit-ex3 dendritic-spine --mesh-file meshes/ellipse1Spine_mesh_2.h5 --time-step 0.0002
-# Run temporal convergence
-python3 main.py --submit-ex3 dendritic-spine --mesh-file meshes/ellipse1Spine_mesh_0.h5 --time-step 0.0004
-python3 main.py --submit-ex3 dendritic-spine --mesh-file meshes/ellipse1Spine_mesh_0.h5 --time-step 0.0001
-python3 main.py --submit-ex3 dendritic-spine --mesh-file meshes/ellipse1Spine_mesh_0.h5 --time-step 0.00005
-python3 main.py --submit-ex3 dendritic-spine --mesh-file meshes/ellipse1Spine_mesh_0.h5 --time-step 0.00001
+for timestep in 0.0002 0.0001 0.00005 0.00001
+do
+    python3 main.py dendritic-spine --mesh-file 1spine_mesh_coarser.h5 --time-step $timestep -o results-dendritic-spine/1spine_coarser_timestep_${timestep}
+    python3 main.py dendritic-spine --mesh-file 1spine_mesh.h5 --time-step $timestep -o results-dendritic-spine/1spine_timestep_${timestep}
+    python3 main.py dendritic-spine --mesh-file 2spine_mesh.h5 --time-step $timestep -o results-dendritic-spine/2spine_timestep_${timestep}
+done
