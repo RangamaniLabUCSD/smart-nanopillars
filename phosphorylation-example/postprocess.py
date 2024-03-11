@@ -250,6 +250,7 @@ def plot_error_different_refinements(all_results, output_folder, format):
             plt.close(fig)
 
             ax_l2.set_xlabel("Refinement")
+            ax_l2.legend(title="Radius")
             ax_l2.set_ylabel("$ \| u_e - u \|^2$")
             fig_l2.savefig(
                 (output_folder / f"error_refinement_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
@@ -348,7 +349,7 @@ def main(
         print(f"Gather results from {results_folder}")
         all_results = load_results(Path(results_folder))
         print(f"Save results to {results_file.absolute()}")
-        (output_folder / "results_phosphorylation.json").write_text(
+        results_file.write_text(
             json.dumps([r.to_json() for r in all_results], indent=4)
         )
 
