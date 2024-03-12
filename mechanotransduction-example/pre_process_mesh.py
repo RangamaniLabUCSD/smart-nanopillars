@@ -78,7 +78,7 @@ def main(
     hEdge: float = 0.6,
     hInnerEdge: float = 0.6,
     num_refinements: int = 0,
-    full_3d = False,
+    full_3d=False,
 ):
     here = Path(__file__).parent.absolute()
     sys.path.append((here / ".." / "utils").as_posix())
