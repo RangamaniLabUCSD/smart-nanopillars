@@ -19,10 +19,6 @@ def add_run_dendritic_spine_arguments(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=0.0002,
     )
-    parser.add_argument(
-        "--enforce-mass-conservation",
-        action='store_true'
-    )
 
 
 def add_preprocess_spine_mesh_arguments(parser: argparse.ArgumentParser) -> None:
@@ -42,3 +38,10 @@ def add_preprocess_spine_mesh_arguments(parser: argparse.ArgumentParser) -> None
         type=int,
         default=0,
     )
+
+
+def add_dendritic_spine_postprocess_arguments(
+    parser: argparse.ArgumentParser,
+) -> None:
+    parser.add_argument("-i", "--results-folder", type=Path, default="./results")
+    parser.add_argument("-o", "--output-folder", type=Path, default="./")
