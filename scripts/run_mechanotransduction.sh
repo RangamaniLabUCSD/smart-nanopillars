@@ -27,7 +27,7 @@ for eval in 0.1 5.7 70000000
 do
     for shape in star rect
     do
-        python3 main.py mechanotransduction --mesh-folder meshes-mechanotransduction/${shape}_hEdge_0.6_refined_0 --time-step 0.01 --e-val $eval --axisymmetric -o results-mechanotransduction/${shape}_hEdge_0.6_refined_0_e_${eval}
+        python3 main.py mechanotransduction --mesh-folder meshes-mechanotransduction/${shape}_hEdge_0.6_refined_0 --time-step 0.01 --e-val $eval -o results-mechanotransduction/${shape}_hEdge_0.6_refined_0_e_${eval}
     done
 done
 
@@ -44,6 +44,6 @@ for eval in 0.1 5.7 70000000
 do
     for shape in star rect
     do
-        python3 main.py --dry-run mechanotransduction --mesh-folder meshes-mechanotransduction/${shape}_hEdge_0.6_refined_0 --time-step 0.01 --e-val $eval --axisymmetric --well-mixed -o results-mechanotransduction/${shape}_hEdge_0.6_refined_0_e_${eval}_well-mixed
+        python3 main.py --dry-run mechanotransduction --mesh-folder meshes-mechanotransduction/${shape}_hEdge_0.6_refined_0 --time-step 0.01 --e-val $eval --well-mixed -o results-mechanotransduction/${shape}_hEdge_0.6_refined_0_e_${eval}_well-mixed
     done
 done
