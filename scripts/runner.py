@@ -320,6 +320,10 @@ def pre_preprocess_mech_mesh(
     num_refinements: int,
     dry_run: bool,
     full_3d: bool,
+    nanopillar_radius: float,
+    nanopillar_height: float,
+    nanopillar_spacing: float,
+    contact_rad: float,
     **kwargs,
 ):
     args = [
@@ -333,6 +337,14 @@ def pre_preprocess_mech_mesh(
         hInnerEdge,
         "--num-refinements",
         num_refinements,
+        "--nanopillar-radius",
+        nanopillar_radius,
+        "--nanopillar-height",
+        nanopillar_height,
+        "--nanopillar-spacing",
+        nanopillar_spacing,
+        "--contact-rad",
+        contact_rad,
     ]
 
     if full_3d:
@@ -366,6 +378,8 @@ def mechanotransduction_example(
     submit_tscc: bool = False,
     ntasks: int = 1,
     partition: str = "defq",
+    curv_sens: float = 0.0,
+    reaction_rate_on_np = 1.0,
     **kwargs,
 ):
     args = [
@@ -377,6 +391,10 @@ def mechanotransduction_example(
         e_val,
         "--z-cutoff",
         z_cutoff,
+        "--curv-sens",
+        curv_sens,
+        "--reaction-rate-on-np",
+        reaction_rate_on_np,
     ]
     if axisymmetric:
         args.append("--axisymmetric")

@@ -8,11 +8,10 @@ import numpy as np
 import dolfin as d
 from mpi4py import MPI
 from sympy.parsing.sympy_parser import parse_expr
-from smart.mesh_tools import implicit_curve, compute_curvature, gmsh_to_dolfin
+from smart.mesh_tools import implicit_curve, compute_curvature, gmsh_to_dolfin, facet_topology
 
 def create_3dcell(
-    outerExpr: str = "",
-    innerExpr: str = "",
+    contactRad: float = 10.0,
     hEdge: float = 0,
     hInnerEdge: float = 0,
     interface_marker: int = 12,
@@ -22,7 +21,7 @@ def create_3dcell(
     comm: MPI.Comm = d.MPI.comm_world,
     verbose: bool = False,
     return_curvature: bool = False,
-    nanopillars: Tuple[float, float, float] = "",
+    nanopillars: Tuple[float, float, float] = [0, 0, 0],
     thetaExpr: str = "",
     use_tmp: bool = False,
     roughness: Tuple[float, float] = [0, 0]
@@ -77,14 +76,86 @@ def create_3dcell(
     """
     import gmsh
 
-    if outerExpr == "":
-        ValueError("Outer surface is not defined")
+    # outerExpr25 = "(1 - z**4/(1500+z**4)) * (r**2 + z**2) + 0.4*(r**2 + (z+33.2)**2)*z**4 / (0.12 + z**4) - 625"
+    # innerExpr25 = "(r/5.3)**2 + ((z-2.8)/2.4)**2 - 1"
+    # outerExpr25 = "(1 - z**4/(10000+z**4)) * (r**2 + z**2) + 0.4*(r**2 + (z+15.2)**2)*z**4 / (3.0 + z**4) - 256"
+    # outerExpr15 = "(1 - z**4/(1000+z**4)) * (r**2 + z**2) + 0.4*(r**2 + (z+15)**2)*z**4 / (10 + z**4) - 225"
+    # innerExpr15 = "(r/5.3)**2 + ((z-7.8/2)/2.4)**2 - 1"
+    # outerExpr13 = "(1 - z**4/(2000+z**4)) * (r**2 + z**2) + 0.4*(r**2 + (z+9.72)**2)*z**4 / (15 + z**4) - 169"
+    # innerExpr13 = "(r/5.3)**2 + ((z-9.6/2)/2.4)**2 - 1"
+    # outerExpr10 = "(1 - z**4/(35+z**4)) * (r**2 + z**2) + 0.94*(r**2 + (z+.01)**2)*z**4 / (30 + z**4) - 100"
+    # innerExpr10 = "(r/5.3)**2 + ((z-5)/2.4)**2 - 1"
+    # outerExprList = [outerExpr10, outerExpr13, outerExpr15, outerExpr25]
+    aVecRef = np.array([35, 2000, 1000, 1200, 1500, 1000])
+    bVecRef = np.array([0.94, 0.4, 0.4, 0.4, 0.4, 0.4])
+    cVecRef = np.array([0.01, 9.72, 15, 24.5, 33.2, 42])
+    dVecRef = np.array([30, 15, 10, 1.0, 0.12, 0.0322])
+    # innerExprList = [innerExpr10, innerExpr13, innerExpr15, innerExpr25]
+    RList = np.array([10, 13, 15, 20, 25, 30])
+    scaleFactor = 0.82
+    nucScaleFactor = 0.8
+    sym_fraction = 1/8
+    aVecRef = aVecRef / scaleFactor**4
+    cVecRef = cVecRef / scaleFactor
+    dVecRef = dVecRef / scaleFactor**4
+    RList = RList / scaleFactor
+    findMatch = np.isclose(RList, contactRad)
+    if np.any(findMatch):
+        idx = np.nonzero(findMatch)[0][0]
+        refParam = [aVecRef[idx], bVecRef[idx], cVecRef[idx], dVecRef[idx], RList[idx]]
+    elif contactRad < max(RList) and contactRad > min(RList):
+        aVal = np.interp(contactRad, np.array(RList), np.array(aVecRef))
+        bVal = np.interp(contactRad, np.array(RList), np.array(bVecRef))
+        cVal = np.interp(contactRad, np.array(RList), np.array(cVecRef))
+        dVal = np.interp(contactRad, np.array(RList), np.array(dVecRef))
+        refParam = [aVal, bVal, cVal, dVal, contactRad]
+    else:
+        raise ValueError("This shape is outside the specified range")
 
-    rValsOuter, zValsOuter = implicit_curve(outerExpr)
+    nuc_vol = (4/3)*np.pi*5.3*5.3*2.4/nucScaleFactor**3
+    nanopillar_rad = nanopillars[0]
+    nanopillar_height = nanopillars[1]
+    nanopillar_spacing = nanopillars[2]
+    if np.all(np.array(nanopillars) != 0):
+        xSteric = 0.05
+        xCurv = 0.2
+        num_pillars = 2*np.ceil(contactRad/nanopillar_spacing) + 1
+        rMax = nanopillar_spacing * np.ceil(contactRad/nanopillar_spacing)
+        test_coords = np.linspace(-rMax, rMax, int(num_pillars))
+        xTest, yTest = np.meshgrid(test_coords, test_coords)
+        rTest = np.sqrt(xTest**2 + yTest**2)
+        keep_logic = rTest <= contactRad-nanopillar_rad-xCurv-xSteric
+        xTest, yTest = xTest[keep_logic], yTest[keep_logic]
+        num_pillars_tot = len(xTest)
+        nanopillar_vol = num_pillars_tot * np.pi*(
+            (nanopillar_rad+xSteric)**2 * (nanopillar_height-xSteric-xCurv) +
+            xSteric*(nanopillar_rad**2 + nanopillar_rad*xSteric*np.pi/2 + 2*xSteric**2/3) +
+            xCurv*((nanopillar_rad+xSteric)**2 + (nanopillar_rad+xSteric)*xCurv*np.pi/2 + 
+                   2*xCurv**2/3))
+        zOffset = nanopillar_height
+    else:
+        nanopillar_vol = 0
+        zOffset = 0
+    
+    targetVol = 480/scaleFactor**3 *4 + nuc_vol + nanopillar_vol
+    rValsOuter, zValsOuter = shape_adj_axisymm(refParam, zOffset, targetVol)
+    rValsOuter, zValsOuter = dilate_axisymm(rValsOuter, zValsOuter, targetVol)
     zMax = max(zValsOuter)
 
+    rValsOuterClosed = np.concatenate((rValsOuter, -rValsOuter[::-1]))
+    zValsOuterClosed = np.concatenate((zValsOuter,  zValsOuter[::-1]))
+    curvFcnOuter = compute_curvature_1D(rValsOuterClosed, zValsOuterClosed, 
+                                   curvRes=0.1, incl_parallel=True)
+
+    innerExpr = get_inner(zOffset, zMax, nucScaleFactor)
     if not innerExpr == "":
         rValsInner, zValsInner = implicit_curve(innerExpr)
+        aInner, bInner, r0Inner, z0Inner = get_inner_param(zOffset, zMax, nucScaleFactor)
+        # rValsInnerClosed = np.concatenate((rValsInner, -rValsInner[-2:1:-1]))
+        # zValsInnerClosed = np.concatenate((zValsInner,  zValsInner[-2:1:-1]))
+        # curvValsInner = compute_curvature_ellipse(rValsInnerClosed, zValsInnerClosed, 
+        #                                           incl_parallel=True)
+        # curvValsInner = curvValsInner[0:len(rValsInner)]
         zMid = np.mean(zValsInner)
         ROuterVec = np.sqrt(rValsOuter**2 + (zValsOuter - zMid) ** 2)
         RInnerVec = np.sqrt(rValsInner**2 + (zValsInner - zMid) ** 2)
@@ -102,6 +173,7 @@ def create_3dcell(
     gmsh.initialize()
     gmsh.option.setNumber("General.Terminal", int(verbose))
     gmsh.model.add("3dcell")
+
     # first add outer body and revolve
     if thetaExpr != "":
         num_theta = 81
@@ -234,11 +306,14 @@ def create_3dcell(
     else:
         # rotate shape 2*pi in the case of no theta dependence
         outer_tag_list = []
+        line_tag_list = []
         for i in range(len(rValsOuter)):
             if i == 0:
                 outer_tag_list.append(top_point)
             else:
                 cur_tag = gmsh.model.occ.add_point(rValsOuter[i], 0.0, zValsOuter[i])
+                line_tag = gmsh.model.occ.add_line(cur_tag, outer_tag_list[-1])
+                line_tag_list.append(line_tag)
                 outer_tag_list.append(cur_tag)
         outer_spline = gmsh.model.occ.add_spline(outer_tag_list)
         origin_tag = gmsh.model.occ.add_point(0, 0, 0)
@@ -248,27 +323,69 @@ def create_3dcell(
             [outer_spline, symm_axis_tag, bottom_tag]
         )
         cell_plane_tag = gmsh.model.occ.add_plane_surface([outer_loop_tag])
-        outer_shape = gmsh.model.occ.revolve([(2, cell_plane_tag)], 0, 0, 0, 0, 0, 1, 2 * np.pi)
+        outer_shape = gmsh.model.occ.revolve([(2, cell_plane_tag)], 0, 0, 0, 0, 0, 1, 2*np.pi*sym_fraction)
     
-    if nanopillars != "":
-        nanopillar_rad = nanopillars[0]
-        nanopillar_height = nanopillars[1]
-        nanopillar_spacing = nanopillars[2]
+    if np.all(np.array(nanopillars) != 0):
         zero_idx = np.nonzero(zValsOuter <= 0.0)
-        num_pillars = 2*np.floor(rValsOuter[zero_idx]/nanopillar_spacing) + 1
-        rMax = nanopillar_spacing * np.floor(rValsOuter[zero_idx]/nanopillar_spacing)
+        num_pillars = 2*np.ceil(rValsOuter[zero_idx]/nanopillar_spacing) + 1
+        rMax = nanopillar_spacing * np.ceil(rValsOuter[zero_idx]/nanopillar_spacing)
         test_coords = np.linspace(-rMax[0], rMax[0], int(num_pillars[0]))
         xTest, yTest = np.meshgrid(test_coords, test_coords)
         rTest = np.sqrt(xTest**2 + yTest**2)
-        keep_logic = rTest <= rValsOuter[zero_idx]-nanopillar_rad-0.1
+        thetaTest = np.arctan2(yTest, xTest)
+        if sym_fraction==1:
+            keep_logic = rTest <= rValsOuter[zero_idx]-nanopillar_rad-xCurv-xSteric
+        else:
+            keep_logic1 = rTest <= rValsOuter[zero_idx]-nanopillar_rad-xCurv-xSteric
+            keep_logic2 = np.logical_and(thetaTest < (2*np.pi*sym_fraction + np.pi/100), thetaTest > (0.0-np.pi/100))
+            keep_logic = np.logical_and(keep_logic1, keep_logic2)
         xTest, yTest = xTest[keep_logic], yTest[keep_logic]
         for i in range(len(xTest)):
-            cyl_tag = gmsh.model.occ.add_cylinder(
-                xTest[i], yTest[i], 0.0, 0, 0, nanopillar_height-nanopillar_rad, nanopillar_rad)
-            cap_tag = gmsh.model.occ.add_sphere(
-                xTest[i], yTest[i], nanopillar_height-nanopillar_rad, nanopillar_rad)
-            cur_pillar = gmsh.model.occ.fuse([(3,cyl_tag)], [(3,cap_tag)])
-            (outer_shape, outer_shape_map) = gmsh.model.occ.cut(outer_shape, cur_pillar[0])
+            # add points and then rotate?
+            np_tag_list = []
+            np_line_list = []
+            zCur = nanopillar_height + xSteric
+            dtheta = np.pi/8
+            thetaCurv1 = np.arange(np.pi/2, 0, -dtheta)
+            xCurv1 = nanopillar_rad + xSteric*np.cos(thetaCurv1)
+            zCurv1 = nanopillar_height + xSteric*(np.sin(thetaCurv1)-1)
+            thetaCurv2 = np.arange(np.pi, 3*np.pi/2, dtheta)
+            xCurv2 = nanopillar_rad + xSteric + xCurv*(1+np.cos(thetaCurv2))
+            zCurv2 = xCurv*(1+np.sin(thetaCurv2))
+            xCurVec = xTest[i] + np.concatenate((np.array([0]), xCurv1, 
+                                                np.array([nanopillar_rad+xSteric]), xCurv2, 
+                                                np.array([nanopillar_rad+xSteric+xCurv])))
+            yCurVec = yTest[i] * np.ones([len(xCurVec),1])
+            zCurVec = np.concatenate((np.array([nanopillar_height]), zCurv1, 
+                                     np.array([nanopillar_height-xSteric]), zCurv2, 
+                                     np.array([0])))
+            for j in range(len(zCurVec)):
+                cur_tag = gmsh.model.occ.add_point(xCurVec[j], yCurVec[j], zCurVec[j])
+                if j > 0:
+                    cur_line = gmsh.model.occ.add_line(cur_tag, np_tag_list[-1])
+                    np_line_list.append(cur_line)
+                np_tag_list.append(cur_tag)
+
+            # np_spline_tag = gmsh.model.occ.add_spline(np_tag_list)
+            origin_np_tag = gmsh.model.occ.add_point(xTest[i], yTest[i], 0)
+            bottom_np_tag = gmsh.model.occ.add_line(origin_np_tag, np_tag_list[-1])
+            symm_np_tag = gmsh.model.occ.add_line(np_tag_list[0], origin_np_tag)
+            np_loop_tag = gmsh.model.occ.add_curve_loop([*np_line_list, bottom_np_tag, symm_np_tag])
+            np_plane_tag = gmsh.model.occ.add_plane_surface([np_loop_tag])
+            np_shape = gmsh.model.occ.revolve([(2, np_plane_tag)], xTest[i], yTest[i], 0,
+                                              0, 0, 1, 2 * np.pi)
+            np_shape_tags = []
+            for j in range(len(np_shape)):
+                if np_shape[j][0] == 3:  # pull out tags associated with 3d objects
+                    np_shape_tags.append(np_shape[j][1])
+            assert len(np_shape_tags) == 1  # should be just one 3D body from the full revolution
+            # cyl_tag = gmsh.model.occ.add_cylinder(
+            #     xTest[i], yTest[i], 0.0, 0, 0, nanopillar_height-nanopillar_rad, nanopillar_rad)    
+            # cap_tag = gmsh.model.occ.add_sphere(
+            #     xTest[i], yTest[i], nanopillar_height-nanopillar_rad, nanopillar_rad)
+            # cur_pillar = gmsh.model.occ.fuse([(3,cyl_tag)], [(3,cap_tag)])
+            # print(np_shape[1])
+            (outer_shape, outer_shape_map) = gmsh.model.occ.cut(outer_shape, [(3, np_shape_tags[0])])
             outer_shape_list = []
             for j in range(len(outer_shape_map)):
                 if outer_shape_map[j]!=[]:
@@ -298,14 +415,18 @@ def create_3dcell(
     else:
         # Add inner shape
         inner_tag_list = []
+        inner_line_list = []
         for i in range(len(rValsInner)):
             cur_tag = gmsh.model.occ.add_point(rValsInner[i], 0, zValsInner[i])
             inner_tag_list.append(cur_tag)
-        inner_spline_tag = gmsh.model.occ.add_spline(inner_tag_list)
+            if i > 0:
+                cur_line = gmsh.model.occ.add_line(inner_tag_list[-2], inner_tag_list[-1])
+                inner_line_list.append(cur_line)
+        # inner_spline_tag = gmsh.model.occ.add_spline(inner_tag_list)
         symm_inner_tag = gmsh.model.occ.add_line(inner_tag_list[0], inner_tag_list[-1])
-        inner_loop_tag = gmsh.model.occ.add_curve_loop([inner_spline_tag, symm_inner_tag])
+        inner_loop_tag = gmsh.model.occ.add_curve_loop([*inner_line_list, symm_inner_tag])
         inner_plane_tag = gmsh.model.occ.add_plane_surface([inner_loop_tag])
-        inner_shape = gmsh.model.occ.revolve([(2, inner_plane_tag)], 0, 0, 0, 0, 0, 1, 2 * np.pi)
+        inner_shape = gmsh.model.occ.revolve([(2, inner_plane_tag)], 0, 0, 0, 0, 0, 1, 2*np.pi*sym_fraction)
         inner_shape_tags = []
         for i in range(len(inner_shape)):
             if inner_shape[i][0] == 3:  # pull out tags associated with 3d objects
@@ -320,17 +441,23 @@ def create_3dcell(
 
         # Get the outer boundary
         outer_shell = gmsh.model.getBoundary(two_shapes, oriented=False)
+        outer_shell_tags = []
+        for i in range(len(outer_shell)):
+            outer_shell_tags.append(outer_shell[i][1])
         # assert (
         #     len(outer_shell) == 2
         # )  # 2 boundaries because of bottom surface at z = 0, both belong to PM
         # Get the inner boundary
         inner_shell = gmsh.model.getBoundary(inner_shape_map, oriented=False)
+        inner_shell_tags = []
+        for i in range(len(inner_shell)):
+            inner_shell_tags.append(inner_shell[i][1])
         # assert len(inner_shell) == 1
         # Add physical markers for facets
         gmsh.model.add_physical_group(
-            outer_shell[0][0], [outer_shell[0][1], outer_shell[1][1]], tag=outer_marker
+            outer_shell[0][0], outer_shell_tags, tag=outer_marker
         )
-        gmsh.model.add_physical_group(inner_shell[0][0], [inner_shell[0][1]], tag=interface_marker)
+        gmsh.model.add_physical_group(inner_shell[0][0], inner_shell_tags, tag=interface_marker)
 
         # Physical markers for
         all_volumes = [tag[1] for tag in outer_shape_map]
@@ -400,23 +527,79 @@ def create_3dcell(
     # remove tmp mesh and tmp folder
     gmsh_file.unlink(missing_ok=False)
     tmp_folder.rmdir()
-    # return dolfin mesh, mf2 (2d tags) and mf3 (3d tags)
+    # return dolfin mesh, mf2 (2d tags) and mf3 (3d tags) and substrate_markers (2d)
+    substrate_markers = d.MeshFunction("size_t", dmesh, 2)
+    for f in d.facets(dmesh):
+        topology, cellIndices = facet_topology(f, mf3)
+        if topology == "boundary":
+            # test if it is on the outward surface (not substrate)
+            rCur = np.sqrt(f.midpoint().x()**2 + f.midpoint().y()**2)
+            zCur = f.midpoint().z()
+            thetaCur = np.arctan2(f.midpoint().y(), f.midpoint().x())
+            if zCur == 0:
+                mf2.set_value(f.index(), outer_marker)
+                substrate_markers.set_value(f.index(), outer_marker)
+            elif sym_fraction != 1 and (
+                np.isclose(thetaCur, 0.0) or np.isclose(thetaCur, 2*np.pi*sym_fraction)):
+                # then a no flux surface
+                mf2.set_value(f.index(), 0)
+            else: #then either on a nanopillar or outer surface
+                mf2.set_value(f.index(), outer_marker)
+                if np.all(np.array(nanopillars) != 0):
+                    if rCur < contactRad - xCurv + hEdge/100 and zCur < zOffset + hEdge/100:
+                        substrate_markers.set_value(f.index(), outer_marker)
+
     if return_curvature:
-        if innerExpr == "":
-            facet_list = [outer_marker]
-            cell_list = [outer_vol_tag]
-        else:
-            facet_list = [outer_marker, interface_marker]
-            cell_list = [outer_vol_tag, inner_vol_tag]
-        kappa_mf = compute_curvature(dmesh, mf2, mf3, facet_list, cell_list)
-        return (dmesh, mf2, mf3, kappa_mf)
+        curv_markers = d.MeshFunction("double", dmesh, 0)#compute_curvature(dmesh, mf2, mf3, facet_list, cell_list)
+        # first set curvatures on substrate
+        for f in d.facets(dmesh):
+            if substrate_markers.array()[f.index()] == outer_marker:
+                for v in d.vertices(f):
+                    # explictly set curvature for membrane on nanopillars (or set to zero for no nanopillars)
+                    zVal = v.midpoint().z()
+                    if zVal >= nanopillar_height:
+                        curv_markers.set_value(v.index(), 0.0)
+                    elif zVal > nanopillar_height - xSteric: # curved from cyl to top
+                        cosCur = (zVal - (nanopillar_height-xSteric))/xSteric
+                        sinCur = np.sqrt(1 - cosCur**2)
+                        cm = 1/xSteric
+                        cp = sinCur / (nanopillar_rad + xSteric*sinCur)
+                        curv_markers.set_value(v.index(), -(cm+cp)/2) 
+                    elif zVal > xCurv: # cylinder
+                        curv_markers.set_value(v.index(), -0.5/nanopillar_rad)
+                    elif zVal > 0: # curved to substrate
+                        cosCur = (xCurv - zVal)/xCurv
+                        sinCur = np.sqrt(1 - cosCur**2)
+                        cm = 1/xCurv
+                        cp = sinCur / (nanopillar_rad + xSteric + xCurv*(1-sinCur))
+                        curv_markers.set_value(v.index(), (cm+cp)/2)
+                    else: # substrate
+                        curv_markers.set_value(v.index(), 0.0)
+        
+        # curvature on PM and NM
+        for f in d.facets(dmesh):
+            if (substrate_markers.array()[f.index()] == 0 and 
+                mf2.array()[f.index()] == outer_marker):
+                # set curvature at other boundaries (map from 2d mesh case)
+                for v in d.vertices(f):
+                    rVal = np.sqrt(v.midpoint().x()**2 + v.midpoint().y()**2)
+                    zVal = v.midpoint().z()
+                    curv_markers.set_value(v.index(), curvFcnOuter(rVal, 0, zVal))
+            elif mf2.array()[f.index()] == interface_marker:
+                for v in d.vertices(f):
+                    rVal = np.sqrt(v.midpoint().x()**2 + v.midpoint().y()**2)
+                    zVal = v.midpoint().z()
+                    curv_val = compute_curvature_ellipse_alt(np.array([rVal]), np.array([zVal]), 
+                                                             aInner, bInner, 
+                                                             r0Inner, z0Inner, incl_parallel=True)
+                    curv_markers.set_value(v.index(), curv_val[0])
+        return (dmesh, mf2, mf3, substrate_markers, curv_markers)
     else:
-        return (dmesh, mf2, mf3)
+        return (dmesh, mf2, mf3, substrate_markers)
 
 
 def create_2Dcell(
-    outerExpr: str = "",
-    innerExpr: str = "",
+    contactRad: float = 13.0,
     hEdge: float = 0,
     hInnerEdge: float = 0,
     interface_marker: int = 12,
@@ -461,16 +644,46 @@ def create_2Dcell(
     """
     import gmsh
 
-    if outerExpr == "":
-        ValueError("Outer surface is not defined")
+    aVecRef = np.array([35, 2000, 1000, 1200, 1500, 1000])
+    bVecRef = np.array([0.94, 0.4, 0.4, 0.4, 0.4, 0.4])
+    cVecRef = np.array([0.01, 9.72, 15, 24.5, 33.2, 42])
+    dVecRef = np.array([30, 15, 10, 1.0, 0.12, 0.0322])
+    # innerExprList = [innerExpr10, innerExpr13, innerExpr15, innerExpr25]
+    RList = np.array([10, 13, 15, 20, 25, 30])
+    scaleFactor = 0.82
+    nucScaleFactor = 0.8
+    sym_fraction = 1/8
+    aVecRef = aVecRef / scaleFactor**4
+    cVecRef = cVecRef / scaleFactor
+    dVecRef = dVecRef / scaleFactor**4
+    RList = RList / scaleFactor
+    findMatch = np.isclose(RList, contactRad)
+    if np.any(findMatch):
+        idx = np.nonzero(findMatch)[0][0]
+        refParam = [aVecRef[idx], bVecRef[idx], cVecRef[idx], dVecRef[idx], RList[idx]]
+    elif contactRad < max(RList) and contactRad > min(RList):
+        aVal = np.interp(contactRad, np.array(RList), np.array(aVecRef))
+        bVal = np.interp(contactRad, np.array(RList), np.array(bVecRef))
+        cVal = np.interp(contactRad, np.array(RList), np.array(cVecRef))
+        dVal = np.interp(contactRad, np.array(RList), np.array(dVecRef))
+        refParam = [aVal, bVal, cVal, dVal, contactRad]
+    else:
+        raise ValueError("This shape is outside the specified range")
+
+    nuc_vol = (4/3)*np.pi*5.3*5.3*2.4/nucScaleFactor**3
+    zOffset = 0
+    targetVol = 480/scaleFactor**3 *4 + nuc_vol
+    rValsOuter, zValsOuter = shape_adj_axisymm(refParam, zOffset, targetVol)
+    rValsOuter, zValsOuter = dilate_axisymm(rValsOuter, zValsOuter, targetVol)
+    zMax = max(zValsOuter)
+
+    innerExpr = get_inner(zOffset, zMax, nucScaleFactor)
 
     if return_curvature:
         # create full mesh for curvature analysis and then map onto half mesh
         # if half_cell_with_curvature is True
         half_cell_with_curvature = half_cell
         half_cell = False
-
-    rValsOuter, zValsOuter = implicit_curve(outerExpr)
 
     if not innerExpr == "":
         rValsInner, zValsInner = implicit_curve(innerExpr)
@@ -736,8 +949,7 @@ def create_2Dcell(
             cell_list = [outer_tag, inner_tag]
         if half_cell_with_curvature:  # will likely not work in parallel...
             dmesh_half, mf2_half, mf3_half = create_2Dcell(
-                outerExpr,
-                innerExpr,
+                contactRad,
                 hEdge,
                 hInnerEdge,
                 interface_marker,
@@ -759,3 +971,292 @@ def create_2Dcell(
         return (dmesh, mf2, mf3, kappa_mf)
     else:
         return (dmesh, mf2, mf3)
+    
+def calc_vol_axisymm(rVec, zVec):
+    vol = 0
+    for i in range(1, len(rVec)):
+        dr = rVec[i-1] - rVec[i]
+        dz = zVec[i-1] - zVec[i]
+        vol += np.pi*(rVec[i]**2 * dz + rVec[i]*dr*dz + dr**2 * dz / 3)
+    return vol
+
+def dilate_axisymm(rVec, zVec, volTarget):
+    volCur = calc_vol_axisymm(rVec, zVec)
+    normals = [[0, 1]]
+    sTot = 0
+    for i in range(1, len(rVec)-1):
+        dr1 = rVec[i] - rVec[i-1]
+        dz1 = zVec[i] - zVec[i-1]
+        ds1 = np.sqrt(dr1**2 + dz1**2)
+        dr2 = rVec[i+1] - rVec[i]
+        dz2 = zVec[i+1] - zVec[i]
+        ds2 = np.sqrt(dr2**2 + dz2**2)
+        curVec = [-(dz1/ds1+dz2/ds2)/2, (dr1/ds1+dr2/ds2)/2]
+        curVec[0] = curVec[0] / np.sqrt(curVec[0]**2 + curVec[1]**2)
+        curVec[1] = curVec[1] / np.sqrt(curVec[0]**2 + curVec[1]**2)
+        normals.append(curVec)
+        sTot += np.sqrt(ds1)
+    sTot += np.sqrt(ds2)
+    normals.append([1, 0])
+    normalMove = 1.0*sTot/len(rVec)
+    curSign = np.sign(volTarget-volCur)
+    firstIt = True
+    volPrev = volCur
+    while np.abs(volCur-volTarget) > 0.001*volTarget:
+        for i in range(len(rVec)-1):
+            curMove = normalMove*np.sign(volTarget-volCur)*(len(rVec)-i)/len(rVec)
+            rVec[i] += curMove*normals[i][0]
+            zVec[i] += curMove*normals[i][1]
+        volCur = calc_vol_axisymm(rVec, zVec)
+        if firstIt:
+            if curSign == np.sign(volTarget-volCur):
+                # raise ValueError("Desired volume is too far off for adjustments")
+                return (rVec, zVec)
+            else:
+                firstIt = False
+        normalMove = normalMove * np.abs((volTarget-volCur)/(volCur-volPrev))
+        volPrev = volCur
+    return (rVec, zVec)
+
+def make_expr(a, b, c, d, R):
+        return (f"(1 - z**4/({a}+z**4)) * (r**2 + z**2) + "
+                f"{b}*(r**2 + (z+{c})**2)*z**4 / ({d} + z**4) - {R**2}")
+
+def shape_adj_axisymm(paramVec, zOffset, volTarget):
+    rVec, zVec = implicit_curve(make_expr(*paramVec))
+    zVec[0:-2] += zOffset
+    volCur = calc_vol_axisymm(rVec, zVec)
+    curSign = np.sign(volTarget-volCur)
+    firstIt = True
+    volPrev = volCur
+    magChange = 50
+    while np.abs(volCur-volTarget) > 0.01*volTarget:
+        if volCur < volTarget:
+            paramVec[0] = paramVec[0]/np.exp(np.log(magChange)/2)
+            paramVec[1] = paramVec[1]/np.exp(np.log(magChange)/4)
+            paramVec[2] = paramVec[2]/np.exp(np.log(magChange)/4)
+            paramVec[3] = paramVec[3]*magChange
+        else:
+            paramVec[0] = paramVec[0]*np.exp(np.log(magChange)/2)
+            paramVec[1] = paramVec[1]*np.exp(np.log(magChange)/4)
+            paramVec[2] = paramVec[2]*np.exp(np.log(magChange)/4)
+            paramVec[3] = paramVec[3]/magChange
+        rVec, zVec = implicit_curve(make_expr(*paramVec))
+        zVec[0:-2] += zOffset
+        volCur = calc_vol_axisymm(rVec, zVec)
+        if firstIt:
+            if curSign == np.sign(volTarget-volCur):
+                # raise ValueError("Desired volume is too far off for adjustments")
+                return (rVec, zVec)
+            else:
+                firstIt = False
+        magChange = 1 + (magChange-1)*np.abs((volTarget-volCur)/(volCur-volPrev))
+        volPrev = volCur
+        
+    return (rVec, zVec)
+
+def get_inner(zOffset, zMax, scaleFactor):
+    # zMid = (zOffset + zMax) / 2
+    zRad = 2.4/scaleFactor
+    rRad = 5.3/scaleFactor
+    if (zMax - zOffset) <= (zRad*2 + 1.0):
+        zRad = (zMax-zOffset)/2 - 1.0
+        rRad = np.sqrt((5.3**2 * 2.4/scaleFactor**3) / zRad)
+        if zRad < 0:
+            raise ValueError("Nucleus does not fit")
+        # return ""
+    zMid = zOffset + zRad + 0.2
+    return f"(r/{rRad})**2 + ((z-{zMid})/{zRad})**2 - 1"
+
+def get_inner_param(zOffset, zMax, scaleFactor):
+    zRad = 2.4/scaleFactor
+    rRad = 5.3/scaleFactor
+    if (zMax - zOffset) <= (zRad*2 + 1.0):
+        zRad = (zMax-zOffset)/2 - 1.0
+        rRad = np.sqrt((5.3**2 * 2.4/scaleFactor**3) / zRad)
+        if zRad < 0:
+            raise ValueError("Nucleus does not fit")
+    zMid = zOffset + zRad + 0.2
+    return (rRad, zRad, 0.0, zMid)
+
+def compute_curvature_1D(
+    rVals, zVals, 
+    curvRes: float = 0.1,
+    incl_parallel: bool = False, 
+    use_tmp = False,
+    comm: MPI.Comm = d.MPI.comm_world,
+):
+    """
+    Use dolfin functions to estimate curvature on boundary mesh.
+    Boundary meshes are created by extracting the Meshview associated
+    with each facet marker value in facet_marker_vec.
+    The length of cell_marker_vec must be the same length as facet_marker_vec,
+    with each value in the list identifying the marker value for a domain that
+    contains the boundary identified by the associated facet_marker.
+    For instance, if facet_marker_vec=[10,12] and cell_marker_vec=[1,2], then
+    the domain over which mf_cell=1 must contain the domain mf_facet=10 on its boundary
+    and the domain mf_cell=2 must contain domain mf_facet=12 on its boundary.
+    Mean curvature is approximated by first projecting facet normals (n) onto a boundary
+    finite element space and then solving a variational form of kappa = -div(n).
+
+    Args:
+        ref_mesh: dolfin mesh describing the entire geometry (parent mesh)
+        mf_facet: facet mesh function with boundary domain markers
+        mf_cell: cell mesh function with cell domain markers
+        facet_marker_vec: list with values of facet markers to iterate over
+        cell_marker_vec: list with values of cell markers (see above)
+        half_mesh_data: tuple with dolfin mesh for half domain and
+                        facet mesh function over half domain. If not specified,
+                        this is empty and the curvature values are not mapped
+                        onto the half domain
+    Returns:
+        kappa_mf: Vertex mesh function containing mean curvature values
+    """
+    facet_marker = 10
+    cell_marker = 1
+    import gmsh
+    gmsh.initialize()
+    outer_tag_list = []
+    line_list = []
+    for i in range(len(rVals)):
+        cur_tag = gmsh.model.occ.add_point(rVals[i], 0, zVals[i])
+        outer_tag_list.append(cur_tag)
+        if i > 0:
+            cur_line = gmsh.model.occ.add_line(outer_tag_list[-2], cur_tag)
+            line_list.append(cur_line)
+    # outer_spline_tag = gmsh.model.occ.add_spline(outer_tag_list)
+    outer_loop_tag = gmsh.model.occ.add_curve_loop(line_list)
+    cell_plane_tag = gmsh.model.occ.add_plane_surface([outer_loop_tag])
+    gmsh.model.occ.synchronize()
+    facets = gmsh.model.getBoundary([(2, cell_plane_tag)])
+    facet_tag_list = []
+    for i in range(len(facets)):
+        facet_tag_list.append(facets[i][1])
+    gmsh.model.add_physical_group(1, facet_tag_list, tag=facet_marker)
+    gmsh.model.add_physical_group(2, [cell_plane_tag], tag=cell_marker)
+
+    def meshSizeCallback(dim, tag, x, y, z, lc):
+        return curvRes
+    
+    gmsh.model.mesh.setSizeCallback(meshSizeCallback)
+    gmsh.option.setNumber("Mesh.Algorithm", 5)
+    gmsh.model.mesh.generate(2)
+    rank = MPI.COMM_WORLD.rank
+    if use_tmp:
+        tmp_folder = pathlib.Path(f"/root/tmp/tmp_2DCell_{rank}")
+    else:
+        tmp_folder = pathlib.Path(f"tmp_2DCell_{rank}")
+    tmp_folder.mkdir(exist_ok=True)
+    gmsh_file = tmp_folder / "2DCell.msh"
+    gmsh.write(str(gmsh_file))
+    gmsh.finalize()
+    # return dolfin mesh of max dimension (parent mesh) and marker functions mf2 and mf3
+    dmesh, mf_facet, mf_cell = gmsh_to_dolfin(str(gmsh_file), tmp_folder, 2, comm)
+    # remove tmp mesh and tmp folder
+    gmsh_file.unlink(missing_ok=False)
+    tmp_folder.rmdir()
+    
+    mesh = d.MeshView.create(mf_cell, cell_marker)
+    bmesh = d.MeshView.create(mf_facet, facet_marker)
+
+    n = d.FacetNormal(mesh)
+    # estimate facet normals in CG2 for better smoothness and accuracy
+    V = d.VectorFunctionSpace(mesh, "CG", 2)
+    u = d.TrialFunction(V)
+    v = d.TestFunction(V)
+    ds = d.Measure("ds", mesh)
+    a = d.inner(u, v) * ds
+    lform = d.inner(n, v) * ds
+    A = d.assemble(a, keep_diagonal=True)
+    L = d.assemble(lform)
+
+    A.ident_zeros()
+    nh = d.Function(V)
+    d.solve(A, nh.vector(), L)  # project facet normals onto CG1
+
+    Vb = d.FunctionSpace(bmesh, "CG", 1)
+    Vb_vec = d.VectorFunctionSpace(bmesh, "CG", 1)
+    nb = d.interpolate(nh, Vb_vec)
+    p, q = d.TrialFunction(Vb), d.TestFunction(Vb)
+    dx = d.Measure("dx", bmesh)
+    a = d.inner(p, q) * dx
+    lform = d.inner(d.div(nb), q) * dx
+    A = d.assemble(a, keep_diagonal=True)
+    L = d.assemble(lform)
+    A.ident_zeros()
+    kappab = d.Function(Vb)
+    d.solve(A, kappab.vector(), L)
+
+    if incl_parallel:  # then include out of plane (parallel) curvature as well
+        kappab_vec = kappab.vector().get_local()
+        nb_vec = nb.vector().get_local()
+        nb_vec = nb_vec.reshape((int(len(nb_vec) / 3), 3))
+        normal_angle = np.arctan2(nb_vec[:, 0], nb_vec[:, 2])
+        x = Vb.tabulate_dof_coordinates()
+        parallel_curv = kappab_vec
+        logic = x[:,0] != 0
+        parallel_curv[logic] = np.sin(normal_angle[logic]) / x[logic, 0]
+        # parallel_curv = np.sin(normal_angle) / x[:, 0]
+        # inf_logic = np.isinf(parallel_curv)
+        # parallel_curv[inf_logic] = kappab_vec[inf_logic]
+        kappab.vector().set_local((kappab_vec + parallel_curv) / 2.0)
+        kappab.vector().apply("insert")
+
+    # return kappab at r,z values
+    kappab.set_allow_extrapolation(True)
+    # curv_vals = np.zeros(len(rVals))
+    # for i in range(len(rVals)):
+    #     curv_vals[i] = kappab(rVals[i], 0, zVals[i])
+    return kappab
+
+def compute_curvature_ellipse(
+    rVals, zVals,
+    incl_parallel: bool = False, 
+):
+    """
+    Give analytical value for curvature on ellipse surface.
+    If incl_parallel, parallel curvature is also included for axisymmetric case,
+    assuming that r = 0 is the axis of symmetry (3D shape is a spheroid in this case,
+    i.e. an ellipsoid with 2 axes sharing the same length)
+    """
+    aVal = (max(rVals) - min(rVals))/2
+    bVal = (max(zVals) - min(zVals))/2
+    r0 = (max(rVals) + min(rVals))/2
+    z0 = (max(zVals) + min(zVals))/2
+    rVals = rVals - r0
+    zVals = zVals - z0
+
+    curv_vals = np.zeros(len(rVals))
+    for i in range(len(rVals)):
+        tCur = np.arctan2(zVals[i]/bVal, rVals[i]/aVal)
+        curv_vals[i] = aVal*bVal/(bVal**2 * np.cos(tCur)**2 + aVal**2 * np.sin(tCur)**2)**(3/2)
+        if incl_parallel:
+            phiCur = np.arctan((aVal/bVal)*np.tan(tCur))
+            if rVals[i]!=0: # if =0, then the same meridional and parallel curv
+                cp = np.sin(np.pi/2 - phiCur) / rVals[i]
+                curv_vals[i] = (curv_vals[i] + cp)/2
+    return curv_vals
+
+def compute_curvature_ellipse_alt(
+    rVals, zVals, aVal, bVal, r0, z0,
+    incl_parallel: bool = False, 
+):
+    """
+    Give analytical value for curvature on ellipse surface.
+    If incl_parallel, parallel curvature is also included for axisymmetric case,
+    assuming that r = 0 is the axis of symmetry (3D shape is a spheroid in this case,
+    i.e. an ellipsoid with 2 axes sharing the same length)
+    """
+    rVals = rVals - r0
+    zVals = zVals - z0
+
+    curv_vals = np.zeros(len(rVals))
+    for i in range(len(rVals)):
+        tCur = np.arctan2(zVals[i]/bVal, rVals[i]/aVal)
+        curv_vals[i] = aVal*bVal/(bVal**2 * np.cos(tCur)**2 + aVal**2 * np.sin(tCur)**2)**(3/2)
+        if incl_parallel:
+            phiCur = np.arctan((aVal/bVal)*np.tan(tCur))
+            if rVals[i]!=0: # if =0, then the same meridional and parallel curv
+                cp = np.sin(np.pi/2 - phiCur) / rVals[i]
+                curv_vals[i] = (curv_vals[i] + cp)/2
+    return curv_vals

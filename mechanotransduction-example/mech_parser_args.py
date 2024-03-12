@@ -57,6 +57,16 @@ def add_mechanotransduction_arguments(parser: argparse.ArgumentParser) -> None:
         default=1e-4,
     ) # stimulation only below z-cutoff
     parser.add_argument(
+        "--curv-sens",
+        type=float,
+        default=0.0,
+    ) # curvature sensitivity factor of FAK phosph.
+    parser.add_argument(
+        "--reaction-rate-on-np",
+        type=float,
+        default=1.0,
+    ) # fractional FAK phosph. rate on nanopillars
+    parser.add_argument(
         "--axisymmetric",
         action="store_true",
         default=False,
@@ -81,6 +91,10 @@ def add_preprocess_mech_mesh_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--hInnerEdge", type=float, default=0.6)
     parser.add_argument("--num-refinements", type=int, default=0)
     parser.add_argument("--full-3d", action="store_true", default=False)
+    parser.add_argument("--nanopillar-radius", type=float, default=0.0)
+    parser.add_argument("--nanopillar-height", type=float, default=0.0)
+    parser.add_argument("--nanopillar-spacing", type=float, default=0.0)
+    parser.add_argument("--contact-rad", type=float, default=13.0)
 
 
 def add_mechanotransduction_postprocess_arguments(

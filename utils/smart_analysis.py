@@ -62,7 +62,7 @@ def analyze_all(mesh_file="", results_path="", display=True, axisymm=False,
     tVec = []
     for file in os.listdir(results_path):
         # check the files which are end with specific extension
-        if file.endswith(".h5"):
+        if file.endswith(".h5") and "mesh" not in file:
             results_file_list.append(file)
         if ind_files:
             if file.endswith(".xdmf"):
