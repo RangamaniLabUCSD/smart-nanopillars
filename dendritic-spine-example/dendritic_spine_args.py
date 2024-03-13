@@ -45,3 +45,20 @@ def add_dendritic_spine_postprocess_arguments(
 ) -> None:
     parser.add_argument("-i", "--results-folder", type=Path, default="./results")
     parser.add_argument("-o", "--output-folder", type=Path, default="./")
+    parser.add_argument(
+        "-s",
+        "--skip-if-processed",
+        action="store_true",
+        default=False,
+        help=(
+            "Skip loading results from results folder "
+            "if processed results are found in the output folder"
+        )
+    )
+    parser.add_argument(
+        "--use-tex",
+        action="store_true",
+        default=False,
+        help="Use LaTex rendering for figures",
+    )
+    parser.add_argument("-f", "--format", type=str, default="png", help="Format of images")

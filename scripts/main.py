@@ -22,7 +22,7 @@ commands = {
     ),
     "dendritic-spine-postprocess": Command(
         msg="Postprocess dendritic spine example",
-        script=runner.dendritic_spine_example
+        script=runner.dendritic_spine_postprocess
     ),
     "cru-preprocess": Command(
         msg="Run preprocess cru mesh",

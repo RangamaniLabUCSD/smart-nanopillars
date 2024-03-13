@@ -8,31 +8,20 @@ from itertools import cycle
 import numpy as np
 import matplotlib.pyplot as plt
 
-import mech_parser_args
+import dendritic_spine_args
 
 
 class Data(NamedTuple):
     timings_: dict[str, Any]
     config: dict[str, Any]
     t: np.ndarray
-    yap: np.ndarray
-    fac: np.ndarray
+    concVec: np.ndarray
+    gradVec: np.ndarray
     
     @property
-    def refinement(self):
-        return int(self.config["mesh_file"].split("refined_")[-1][0])
+    def mesh(self):
+        return Path(self.config["mesh_file"]).stem
     
-    @property
-    def e_val(self):
-        return self.config["e_val"]
-    
-    @property
-    def z_cutoff(self):
-        return self.config["z_cutoff"]
-    
-    @property
-    def well_mixed(self):
-        return self.config.get("well_mixed", False)
     
     @property
     def dt(self) -> float:
@@ -44,13 +33,17 @@ class Data(NamedTuple):
     
     @property
     def total_run_time(self) -> float:
-        return self.timings[self.timings["name"] == "mechanotransduction-example"]["wall tot"].values[0]
+
+        try:
+            return self.timings[self.timings["name"] == "dritic-spine-example"]["wall tot"].values[0]
+        except IndexError:
+            return np.nan
     
     def to_json(self) -> dict[str, Any]:
         return {
             "t": self.t.tolist(),
-            "yap": self.yap.tolist(),
-            "fac": self.fac.tolist(),
+            "concVec": self.concVec.tolist(),
+            "gradVec": self.gradVec.tolist(),
             "config": self.config,
             "timings_": self.timings_,
         }
@@ -70,52 +63,48 @@ def load_all_data(main_path: Path):
         all_data.append(data)
     return all_data
 
-def is_default(d: Data) -> bool:
-    return np.isclose(d.dt, 0.01) and d.refinement == 0
 
 def plot_data(data: list[Data], output_folder, format: str = "png"):
     fig, ax = plt.subplots(2, 3, sharex=True, sharey="row", figsize=(12, 8))
-    fig_t, ax_t = plt.subplots(1, 3, sharey=True, figsize=(12, 4))    
-    linestyles = [cycle(["-", "--", ":", "-."]) for _ in range(3)]
+      
+    mesh2index = {"1spine_mesh_coarser": 0, "1spine_mesh": 1, "2spine_mesh": 2}
 
-    # Plot 
+    dts = list(sorted({d.dt for d in data}))
+    timings = (np.zeros_like(dts), np.zeros_like(dts), np.zeros_like(dts))
+    # Plot
+    for d in sorted(data, key=lambda x: x.dt):
+        index = mesh2index[d.mesh]
+        timings[index][dts.index(d.dt)] = d.total_run_time
+        ax[0, index].plot(d.t, d.concVec, label=d.dt)
+        ax[1, index].plot(d.t, d.gradVec, label=d.dt)
+        # breakpoint()
+        print(d.mesh, d.dt, d.total_run_time)
 
-    for d in data:
-        print(d.refinement, d.dt, d.e_val, d.z_cutoff, d.well_mixed)
 
-    # Get the default data
-    default_data = next(d for d in data if is_default(d))
+    for k, v in mesh2index.items():
+        ax[0, v].set_title(" ".join(k.split("_")))
+    
+    ax[0, 0].set_ylabel("Average Cytosolic calcium (μM)")
+    ax[1, 0].set_ylabel("Average Gradient of Cytosolic calcium (μM)")
 
-    # Plot the temporal convergence
-    temporal_convergence_data = sorted([default_data] + [di for di in data if not is_default(di) and not np.isclose(di.dt, 0.01)], key=lambda x: x.dt)
-    for d in temporal_convergence_data:
-        ax[0, 0].plot(d.t, d.yap, linestyle=next(linestyles[0]), label=f'dt={d.dt}')
-        ax[1, 0].plot(d.t, d.fac, linestyle=next(linestyles[0]), label=f'dt={d.dt}')
+    for axi in ax.flatten():
+        axi.legend(title="Timestep")
 
-    x = np.arange(len(temporal_convergence_data))
-    ax_t[0].bar(x, [d.total_run_time for d in temporal_convergence_data])
-    ax_t[0].set_xticks(x)
-    ax_t[0].set_xticklabels([d.dt for d in temporal_convergence_data])
-    ax_t[0].set_xlabel("dt")
-    ax_t[0].set_title("Temporal convergence")
-    ax_t[0].set_ylabel("Time [s]")
-        
-    # Plot the spatial convergence
-    spatial_convergence_data = sorted([default_data] + [di for di in data if not is_default(di) and di.refinement > 0], key=lambda x: x.refinement)
-    for d in spatial_convergence_data:
-        ax[0, 1].plot(d.t, d.yap, linestyle=next(linestyles[1]), label=f'# refinements = {d.refinement}')
-        ax[1, 1].plot(d.t, d.yap, linestyle=next(linestyles[1]), label=f'# refinements = {d.refinement}')
+    fig.savefig((output_folder / "results.png").with_suffix(f".{format}"))
 
-    x = np.arange(len(spatial_convergence_data))
-    ax_t[1].bar(x, [d.total_run_time for d in spatial_convergence_data])
-    ax_t[1].set_xticks(x)
-    ax_t[1].set_xticklabels([d.refinement for d in spatial_convergence_data])
-    ax_t[1].set_xlabel("# refinements")
-    ax_t[1].set_title("Spatial convergence")
-    Path(output_folder).mkdir(exist_ok=True, parents=True)
-    fig.savefig((Path(output_folder) / "mechanotransduction_yap.png").with_suffix(f".{format}"))
-    fig_t.savefig((Path(output_folder) / "timings_mechanotransduction.png").with_suffix(f".{format}"))
+    # Plot timings
+    fig_t, ax_t = plt.subplots()
 
+    x = np.arange(0, len(dts))
+    ax_t.bar(x-0.25, timings[0], width=0.25, label=" ".join(list(mesh2index.keys())[0].split("_")))
+    ax_t.bar(x, timings[1], width=0.25, label=" ".join(list(mesh2index.keys())[1].split("_")))
+    ax_t.bar(x+0.25, timings[2], width=0.25, label=" ".join(list(mesh2index.keys())[2].split("_")))
+    ax_t.set_yscale("log")
+    ax_t.set_xticks(x)
+    ax_t.set_xticklabels(dts)
+    ax_t.legend()
+    ax_t.grid()
+    fig_t.savefig((output_folder / "timings.png").with_suffix(f".{format}"))
 
         
 def load_timings(folder: Path) -> dict[str, Any]:
@@ -154,13 +143,13 @@ def load_data(folder: Path = Path("82094")) -> Data:
         raise FileNotFoundError(t_file)
 
     t = np.loadtxt(t_file)
-    yap = np.loadtxt(folder / "YAPTAZ_nuc.txt")
-    fac = np.loadtxt(folder / "FActin.txt")
+    concVec = np.load(folder / "concVec.npy")
+    gradVec = np.load(folder / "gradVec.npy")
 
     config = json.loads(config_file.read_text())
     timings = load_timings(folder=folder)
 
-    return Data(timings_=timings, config=config, t=t, yap=yap, fac=fac)
+    return Data(timings_=timings, config=config, t=t, concVec=concVec, gradVec=gradVec)
     
 def main(results_folder: Path, output_folder: Path, 
          format: str = "png",
@@ -171,7 +160,7 @@ def main(results_folder: Path, output_folder: Path,
     plt.rcParams["text.usetex"] = use_tex
 
     output_folder.mkdir(exist_ok=True, parents=True)
-    results_file = output_folder / "results_mechanotransduction.json"
+    results_file = output_folder / "results_dendritic_spine.json"
 
     if skip_if_processed and results_file.is_file():
         print(f"Load results from {results_file}")
@@ -190,6 +179,6 @@ def main(results_folder: Path, output_folder: Path,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    mech_parser_args.add_mechanotransduction_postprocess_arguments(parser)
+    dendritic_spine_args.add_dendritic_spine_postprocess_arguments(parser)
     args = vars(parser.parse_args())
     raise SystemExit(main(**args))
