@@ -70,8 +70,6 @@ def load_all_data(main_path: Path):
         all_data.append(data)
     return all_data
 
-def is_default(d: Data) -> bool:
-    return np.isclose(d.dt, 0.01) and d.refinement == 0
 
 def plot_data(data: list[Data], output_folder, format: str = "png"):
     fig, ax = plt.subplots(2, 3, sharex=True, sharey="row", figsize=(12, 8))
@@ -79,43 +77,59 @@ def plot_data(data: list[Data], output_folder, format: str = "png"):
     linestyles = [cycle(["-", "--", ":", "-."]) for _ in range(3)]
 
     # Plot 
+    refinements = set()
+    e_vals = set()
+    z_cutoffs = set()
 
     for d in data:
         print(d.refinement, d.dt, d.e_val, d.z_cutoff, d.well_mixed)
+        refinements.add(d.refinement)
+        e_vals.add(d.e_val)
+        z_cutoffs.add(d.z_cutoff)
 
-    # Get the default data
-    default_data = next(d for d in data if is_default(d))
+   
+    # Eval vs Cutoff
+    x = np.arange(len(refinements))
+    fig_yap, ax_yap = plt.subplots(len(e_vals), 2, sharex=True, sharey="row", figsize=(10, 10))
+    fig_fac, ax_fac = plt.subplots(len(e_vals), 2, sharex=True, sharey="row", figsize=(10, 10))
+    fig_t, ax_t = plt.subplots(len(e_vals), 2, sharex=True, sharey="row", figsize=(10, 10))
+    for i, e_val in enumerate(e_vals):
+        ax2 = ax_yap[i, -1].twinx()
+        ax2.set_yticks([])
+        ax2.set_ylabel(f"e val = {e_val}")
 
-    # Plot the temporal convergence
-    temporal_convergence_data = sorted([default_data] + [di for di in data if not is_default(di) and not np.isclose(di.dt, 0.01)], key=lambda x: x.dt)
-    for d in temporal_convergence_data:
-        ax[0, 0].plot(d.t, d.yap, linestyle=next(linestyles[0]), label=f'dt={d.dt}')
-        ax[1, 0].plot(d.t, d.fac, linestyle=next(linestyles[0]), label=f'dt={d.dt}')
+        ax2 = ax_fac[i, -1].twinx()
+        ax2.set_yticks([])
+        ax2.set_ylabel(f"e val = {e_val}")
 
-    x = np.arange(len(temporal_convergence_data))
-    ax_t[0].bar(x, [d.total_run_time for d in temporal_convergence_data])
-    ax_t[0].set_xticks(x)
-    ax_t[0].set_xticklabels([d.dt for d in temporal_convergence_data])
-    ax_t[0].set_xlabel("dt")
-    ax_t[0].set_title("Temporal convergence")
-    ax_t[0].set_ylabel("Time [s]")
-        
-    # Plot the spatial convergence
-    spatial_convergence_data = sorted([default_data] + [di for di in data if not is_default(di) and di.refinement > 0], key=lambda x: x.refinement)
-    for d in spatial_convergence_data:
-        ax[0, 1].plot(d.t, d.yap, linestyle=next(linestyles[1]), label=f'# refinements = {d.refinement}')
-        ax[1, 1].plot(d.t, d.yap, linestyle=next(linestyles[1]), label=f'# refinements = {d.refinement}')
+        ax2 = ax_t[i, -1].twinx()
+        ax2.set_yticks([])
+        ax2.set_ylabel(f"e val = {e_val}")
+        for j, well_mixed in enumerate([True, False]):
+            ax_yap[0, j].set_title(f"well mixed = {well_mixed}")
+            ax_fac[0, j].set_title(f"well mixed = {well_mixed}")
+            ax_t[0, j].set_title(f"well mixed = {well_mixed}")
+            times = []
+       
+            for d in sorted([di for di in data if di.e_val == e_val and di.well_mixed is well_mixed], key=lambda x: x.refinement):
+                times.append(d.total_run_time)
+                ax_yap[i, j].plot(d.t, d.yap, label=f"refinement = {d.refinement}")
+                ax_fac[i, j].plot(d.t, d.fac, label=f"refinement = {d.refinement}")
 
-    x = np.arange(len(spatial_convergence_data))
-    ax_t[1].bar(x, [d.total_run_time for d in spatial_convergence_data])
-    ax_t[1].set_xticks(x)
-    ax_t[1].set_xticklabels([d.refinement for d in spatial_convergence_data])
-    ax_t[1].set_xlabel("# refinements")
-    ax_t[1].set_title("Spatial convergence")
-    Path(output_folder).mkdir(exist_ok=True, parents=True)
-    fig.savefig((Path(output_folder) / "mechanotransduction_yap.png").with_suffix(f".{format}"))
-    fig_t.savefig((Path(output_folder) / "timings_mechanotransduction.png").with_suffix(f".{format}"))
 
+            ax_t[i, j].bar(x, times, width=0.3)
+            ax_t[i, j].set_yscale("log")
+            ax_t[i, j].set_xticks(x)
+            ax_t[i, j].set_xticklabels(list(sorted(refinements)))
+
+            ax_yap[i, j].legend()
+            ax_fac[i, j].legend()
+            ax_t[i, j].legend()
+
+    fig_yap.savefig((Path(output_folder) / "yap").with_suffix(f".{format}"))
+    fig_fac.savefig((Path(output_folder) / "fac").with_suffix(f".{format}"))
+    fig_t.savefig((Path(output_folder) / "timings").with_suffix(f".{format}"))
+    
 
         
 def load_timings(folder: Path) -> dict[str, Any]:

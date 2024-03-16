@@ -35,7 +35,7 @@ class Data(NamedTuple):
     def total_run_time(self) -> float:
 
         try:
-            return self.timings[self.timings["name"] == "dritic-spine-example"]["wall tot"].values[0]
+            return self.timings[self.timings["name"] == "dendritic-spine-example"]["wall tot"].values[0]
         except IndexError:
             return np.nan
     
@@ -60,6 +60,7 @@ def load_all_data(main_path: Path):
         except FileNotFoundError as e:
             print(f"Skipping folder {folder}, due to {e}")
             continue
+       
         all_data.append(data)
     return all_data
 
