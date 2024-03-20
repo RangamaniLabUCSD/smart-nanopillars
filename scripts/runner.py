@@ -1,4 +1,5 @@
 import sys
+import json
 from textwrap import dedent
 from pathlib import Path
 import subprocess as sp
@@ -24,6 +25,8 @@ mkdir -p ${{SCRATCH_DIRECTORY}}
 echo "Scratch directory: ${{SCRATCH_DIRECTORY}}"
 
 echo 'Run command: python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}'
+echo 'Partition: {partition}'
+echo 'ntasks: {ntasks}'
 mpirun -n {ntasks} python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}
 # Move log file to results folder
 mv ${{SLURM_JOBID}}-* ${{SCRATCH_DIRECTORY}}
@@ -170,7 +173,7 @@ def phosphorylation_example(
 
     if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
-
+        
     script = (
         (here / ".." / "phosphorylation-example" / "phosphorylation.py")
         .absolute()

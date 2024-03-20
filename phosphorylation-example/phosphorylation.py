@@ -311,6 +311,8 @@ if model_cur.mpi_comm_world.rank == 0:
                 "time_step": args["time_step"],
                 "curRadius": args["curRadius"],
                 "diffusion": args["diffusion"],
+                "hmin": parent_mesh.dolfin_mesh.hmin(),
+                "hmax": parent_mesh.dolfin_mesh.hmax()
             }
         )
     )

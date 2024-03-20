@@ -13,8 +13,107 @@ import pandas as pd
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
+import re
 import json
 import phosphorylation_parser_args
+
+ntasks_pattern = re.compile("ntasks: (?P<n>\d)")
+
+hmin_hmax = {
+    "curRadius_10_axisymmetric_refined_0": {
+        "hmax": 2.107398697464825,
+        "hmin": 0.18146878678974115,
+    },
+    "curRadius_10_axisymmetric_refined_1": {
+        "hmax": 1.203146011049625,
+        "hmin": 0.09073439339487056,
+    },
+    "curRadius_10_axisymmetric_refined_2": {
+        "hmax": 0.6015730055248131,
+        "hmin": 0.04536719669743526,
+    },
+    "curRadius_10_refined_0": {"hmax": 2.9569505547636203, "hmin": 0.18243415650338052},
+    "curRadius_10_refined_1": {"hmax": 2.0282963176600526, "hmin": 0.08695003394032726},
+    "curRadius_10_refined_2": {"hmax": 1.1324701545883051, "hmin": 0.04347501697016299},
+    "curRadius_1_axisymmetric_refined_0": {
+        "hmax": 0.26490778698922435,
+        "hmin": 0.16056605553927863,
+    },
+    "curRadius_1_axisymmetric_refined_1": {
+        "hmax": 0.1581009706925238,
+        "hmin": 0.0802830277696392,
+    },
+    "curRadius_1_axisymmetric_refined_2": {
+        "hmax": 0.0790504853462619,
+        "hmin": 0.0401415138848195,
+    },
+    "curRadius_1_refined_0": {"hmax": 0.4100302314099659, "hmin": 0.21629758636837643},
+    "curRadius_1_refined_1": {"hmax": 0.3022104956209887, "hmin": 0.10814879318418821},
+    "curRadius_1_refined_2": {"hmax": 0.1713261905906801, "hmin": 0.05278417512311456},
+    "curRadius_2_axisymmetric_refined_0": {
+        "hmax": 0.4180690194683049,
+        "hmin": 0.1677446599326136,
+    },
+    "curRadius_2_axisymmetric_refined_1": {
+        "hmax": 0.27392365842436256,
+        "hmin": 0.08387232996630663,
+    },
+    "curRadius_2_axisymmetric_refined_2": {
+        "hmax": 0.1369618292121815,
+        "hmin": 0.04193616498315315,
+    },
+    "curRadius_2_refined_0": {"hmax": 0.6745129390201708, "hmin": 0.2064875125954894},
+    "curRadius_2_refined_1": {"hmax": 0.4406744161036693, "hmin": 0.10324375629774465},
+    "curRadius_2_refined_2": {
+        "hmax": 0.24875502991800244,
+        "hmin": 0.051621878148872244,
+    },
+    "curRadius_4_axisymmetric_refined_0": {
+        "hmax": 0.826381779846353,
+        "hmin": 0.17537383439392057,
+    },
+    "curRadius_4_axisymmetric_refined_1": {
+        "hmax": 0.5127250117828788,
+        "hmin": 0.08768691719696028,
+    },
+    "curRadius_4_axisymmetric_refined_2": {
+        "hmax": 0.2563625058914398,
+        "hmin": 0.043843458598478394,
+    },
+    "curRadius_4_refined_0": {"hmax": 1.1675982278230856, "hmin": 0.19354524111099},
+    "curRadius_4_refined_1": {"hmax": 0.795009636638825, "hmin": 0.096772620555495},
+    "curRadius_4_refined_2": {"hmax": 0.4838682319356164, "hmin": 0.048386310277747334},
+    "curRadius_6_axisymmetric_refined_0": {
+        "hmax": 1.1186753394210012,
+        "hmin": 0.17578088012385903,
+    },
+    "curRadius_6_axisymmetric_refined_1": {
+        "hmax": 0.5593376697105006,
+        "hmin": 0.0878904400619295,
+    },
+    "curRadius_6_axisymmetric_refined_2": {
+        "hmax": 0.27966883485525074,
+        "hmin": 0.04394522003096466,
+    },
+    "curRadius_6_refined_0": {"hmax": 1.7475830500863683, "hmin": 0.18994236725031408},
+    "curRadius_6_refined_1": {"hmax": 1.3511624344614612, "hmin": 0.09497118362515661},
+    "curRadius_6_refined_2": {"hmax": 0.751970864469718, "hmin": 0.04748559181257788},
+    "curRadius_8_axisymmetric_refined_0": {
+        "hmax": 1.5548494560250927,
+        "hmin": 0.18423090220778784,
+    },
+    "curRadius_8_axisymmetric_refined_1": {
+        "hmax": 1.0521403888691427,
+        "hmin": 0.09211545110389385,
+    },
+    "curRadius_8_axisymmetric_refined_2": {
+        "hmax": 0.5260701944345721,
+        "hmin": 0.04605772555194692,
+    },
+    "curRadius_8_refined_0": {"hmax": 2.3990626175740966, "hmin": 0.17628233360891069},
+    "curRadius_8_refined_1": {"hmax": 1.7128579342869876, "hmin": 0.08814116680445533},
+    "curRadius_8_refined_2": {"hmax": 0.9724037385516981, "hmin": 0.044070583402227574},
+}
 
 
 class Data(NamedTuple):
@@ -23,6 +122,9 @@ class Data(NamedTuple):
     l2: np.ndarray
     config: Dict[str, Any]
     timings_: Dict[str, Any]
+    stderr: str
+    stdout: str
+    ntasks: int
 
     @property
     def radius(self):
@@ -43,6 +145,15 @@ class Data(NamedTuple):
     @property
     def timings(self):
         return pd.DataFrame(self.timings_)
+    
+    @property
+    def hmin(self) -> float:
+        return self.config.get("hmin", hmin_hmax[self.config["mesh_file"].split("/")[-1]]["hmin"])
+    
+    @property
+    def hmax(self) -> float:
+        return self.config.get("hmax", hmin_hmax[self.config["mesh_file"].split("/")[-1]]["hmax"])
+    
 
     @property
     def refinement(self):
@@ -58,7 +169,18 @@ class Data(NamedTuple):
             "l2": float(self.l2),
             "config": self.config,
             "timings_": self.timings_,
+            "stderr": self.stderr,
+            "stdout": self.stdout,
+            "ntasks": self.ntasks,
         }
+
+
+def parse_ntasks(stdout: str) -> int:
+    for line in stdout.splitlines():
+        if m := re.match(ntasks_pattern, line):
+            return int(m.group("n"))
+
+    return 1
 
 
 def parse_timings(timings: str) -> Dict[str, Any]:
@@ -83,12 +205,30 @@ def load_results(folder):
             continue
         if not (result_folder / "avg_Aphos.txt").exists():
             continue
+        stdout = (
+            result_folder / f"{result_folder.name}-phosphorylation-stdout.txt"
+        ).read_text()
+        stderr = (
+            result_folder / f"{result_folder.name}-phosphorylation-stderr.txt"
+        ).read_text()
+        ntasks = parse_ntasks(stdout=stdout)
         config = json.loads((result_folder / "config.json").read_text())
         t = np.loadtxt(result_folder / "tvec.txt")
         ss = np.loadtxt(result_folder / "avg_Aphos.txt")
         l2 = np.loadtxt(result_folder / "L2norm.txt")
         timings = parse_timings((result_folder / "timings.txt").read_text())
-        data.append(Data(t=t, ss=ss, l2=l2, config=config, timings_=timings))
+        data.append(
+            Data(
+                t=t,
+                ss=ss,
+                l2=l2,
+                config=config,
+                timings_=timings,
+                stderr=stderr,
+                stdout=stdout,
+                ntasks=ntasks,
+            )
+        )
         print(data[-1])
 
     if len(data) == 0:
@@ -100,7 +240,7 @@ def analytical_solution(radius, D=10.0):
     k_kin = 50
     k_p = 10
     cT = 1
-    thieleMod = radius / np.sqrt(D/k_p)
+    thieleMod = radius / np.sqrt(D / k_p)
     C1 = (
         k_kin
         * cT
@@ -148,52 +288,71 @@ def plot_error_analytical_solution_different_radius(all_results, output_folder, 
                 l2 = np.array([d.l2 for d in results])
                 total_run_time = [
                     float(
-                        result.timings[result.timings["name"] == "phosphorylation-example"].iloc[0][
-                            "wall tot"
-                        ]
+                        result.timings[
+                            result.timings["name"] == "phosphorylation-example"
+                        ].iloc[0]["wall tot"]
                     )
                     for result in results
                 ]
-              
-                ax_steady.plot(radiusVec, ss_vec, linestyle=":", marker="o", label=f"SMART simulation (refinement: {refinement})")
-                ax_percent.plot(radiusVec, percentError, label=f"refinement {refinement}") 
-                ax_l2.semilogy(radiusVec, l2, label=f"refinement {refinement}")        
+
+                ax_steady.plot(
+                    radiusVec,
+                    ss_vec,
+                    linestyle=":",
+                    marker="o",
+                    label=f"SMART simulation (refinement: {refinement})",
+                )
+                ax_percent.plot(
+                    radiusVec, percentError, label=f"refinement {refinement}"
+                )
+                ax_l2.semilogy(radiusVec, l2, label=f"refinement {refinement}")
                 rmse = np.sqrt(np.mean(percentError**2))
-                print(f"RMSE with respect to analytical solution = {rmse:.3f}% for refinement {refinement}, D: {diffusion}, axisymetric: {axisymmetric}") 
+                print(
+                    f"RMSE with respect to analytical solution = {rmse:.3f}% for refinement {refinement}, D: {diffusion}, axisymetric: {axisymmetric}"
+                )
                 ax_time.plot(radiusVec, total_run_time, marker="o")
 
             radiusTest = np.logspace(0, 1, 100)
-            cA_smooth = analytical_solution(radiusTest,  D=diffusion)
+            cA_smooth = analytical_solution(radiusTest, D=diffusion)
             ax_steady.plot(radiusTest, cA_smooth, label="Analytical solution")
-            
-           
+
             ax_l2.set_xlabel("Cell radius (μm)")
             ax_l2.set_ylabel("$ \| u_e - u \|^2$")
             ax_l2.set_title("$\ell^2$ error from analytical solution")
             ax_l2.legend()
             fig_l2.savefig(
-                (output_folder / f"error_radius_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
+                (
+                    output_folder
+                    / f"error_radius_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+                )
             )
             plt.close(fig_l2)
 
-            
             ax_time.set_xlabel("Cell radius (μm)")
             ax_time.set_ylabel("Total run time [s]")
             ax_time.legend()
-            fig_time.savefig(output_folder / f"total_time_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
+            fig_time.savefig(
+                output_folder
+                / f"total_time_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+            )
             plt.close(fig_time)
-
 
             ax_steady.set_xlabel("Cell radius (μm)")
             ax_steady.set_ylabel("Steady state concentration (μM)")
             ax_steady.legend()
-            fig_steady.savefig(output_folder / f"steady_state_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
+            fig_steady.savefig(
+                output_folder
+                / f"steady_state_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+            )
             plt.close(fig_steady)
 
             ax_percent.set_xlabel("Cell radius (μm)")
             ax_percent.set_ylabel("Percent error from analytical solution")
             ax_percent.legend()
-            fig_percent.savefig(output_folder / f"percent_error_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
+            fig_percent.savefig(
+                output_folder
+                / f"percent_error_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+            )
             plt.close(fig_percent)
 
 
@@ -222,7 +381,7 @@ def plot_error_different_refinements(all_results, output_folder, format):
                     )
                 )
                 refinements = np.array([d.refinement for d in results])
-                cA = analytical_solution(radius,  D=diffusion)
+                cA = analytical_solution(radius, D=diffusion)
                 ss_vec = np.array([d.ss[-1] for d in results])
                 percentError = 100 * np.abs(ss_vec - cA) / cA
                 ax.plot(refinements, percentError, marker="o", label=radius)
@@ -246,14 +405,20 @@ def plot_error_different_refinements(all_results, output_folder, format):
             ax.legend(title="Radius")
             ax.set_xlabel("Refinement")
             ax.set_ylabel("Percent error from analytical solution")
-            fig.savefig(output_folder / f"percent_error_refinement_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
+            fig.savefig(
+                output_folder
+                / f"percent_error_refinement_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+            )
             plt.close(fig)
 
             ax_l2.set_xlabel("Refinement")
             ax_l2.legend(title="Radius")
             ax_l2.set_ylabel("$ \| u_e - u \|^2$")
             fig_l2.savefig(
-                (output_folder / f"error_refinement_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
+                (
+                    output_folder
+                    / f"error_refinement_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+                )
             )
             plt.close(fig_l2)
 
@@ -261,7 +426,10 @@ def plot_error_different_refinements(all_results, output_folder, format):
             ax_time.set_xlabel("Refinement")
             ax_time.set_ylabel("Total run time [s]")
             fig_time.savefig(
-                (output_folder / f"total_time_refinement_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
+                (
+                    output_folder
+                    / f"total_time_refinement_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+                )
             )
             plt.close(fig_time)
 
@@ -290,7 +458,7 @@ def plot_error_different_timesteps(all_results, output_folder, format):
                     )
                 )
                 dts = np.array([d.dt for d in results])
-                cA = analytical_solution(radius,  D=diffusion)
+                cA = analytical_solution(radius, D=diffusion)
                 ss_vec = np.array([d.ss[-1] for d in results])
                 percentError = 100 * np.abs(ss_vec - cA) / cA
                 ax.plot(dts, percentError, marker="o", label=radius)
@@ -314,21 +482,69 @@ def plot_error_different_timesteps(all_results, output_folder, format):
             ax.legend(title="Radius")
             ax.set_xlabel("Time step [s]")
             ax.set_ylabel("Percent error from analytical solution")
-            fig.savefig(output_folder / f"percent_error_timestep_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
+            fig.savefig(
+                output_folder
+                / f"percent_error_timestep_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+            )
             plt.close(fig)
 
             ax_l2.set_xlabel("Time step [s]")
             ax_l2.set_ylabel("$ \| u_e - u \|^2$")
             fig_l2.savefig(
-                (output_folder / f"error_timestep_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
+                (
+                    output_folder
+                    / f"error_timestep_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+                )
             )
             plt.close(fig_l2)
 
             ax_time.legend(title="Radius")
             ax_time.set_xlabel("Time step [s]")
             ax_time.set_ylabel("Total run time [s]")
-            fig_time.savefig(output_folder / f"total_time_timestep_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}")
+            fig_time.savefig(
+                output_folder
+                / f"total_time_timestep_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+            )
             plt.close(fig_time)
+
+
+def plot_time_step_vs_refinement(all_results, output_folder, format, axisymmetric=True):
+    radii = sorted({r.radius for r in all_results if r.ntasks == 1})
+    diffusions = sorted({r.diffusion for r in all_results if r.ntasks == 1})
+    refinements = sorted({r.refinement for r in all_results if r.ntasks == 1})
+    time_steps = sorted({r.dt for r in all_results if r.ntasks == 1})
+
+    fig, ax = plt.subplots(len(radii), len(diffusions), sharex=True, figsize=(10, 10))
+    
+    for i, radius in enumerate(radii):
+        ax2 = ax[i, -1].twinx()
+        ax2.set_ylabel(f"Radius = {radius}")
+        ax2.set_yticks([])
+        
+        for j, diffusion in enumerate(diffusions):
+            ax[0, j].set_title(f"D = {diffusion}")
+            
+            for refinement in refinements:
+                results = list(
+                        sorted(
+                            filter(
+                                lambda d: np.isclose(d.radius, radius)
+                                and d.refinement == refinement
+                                and np.isclose(d.diffusion, diffusion)
+                                and (d.axisymmetric is axisymmetric),
+                                all_results,
+                            ),
+                            key=lambda d: d.dt,
+                        )
+                    )
+                l2 = np.array([d.l2 for d in results])
+                dts = np.array([d.dt for d in results])
+                ax[i, j].loglog(dts, l2, marker="o", label=f"hmin {results[0].hmin:.3f}, hmax: {results[0].hmax:.3f},")
+                
+            ax[i, j].legend()
+        
+    fig.savefig(output_folder / f"timestep_vs_refinement.{format}")
+
 
 
 def main(
@@ -353,9 +569,10 @@ def main(
             json.dumps([r.to_json() for r in all_results], indent=4)
         )
 
-    plot_error_analytical_solution_different_radius(all_results, output_folder, format)
-    plot_error_different_refinements(all_results, output_folder, format)
-    plot_error_different_timesteps(all_results, output_folder, format)
+    # plot_error_analytical_solution_different_radius(all_results, output_folder, format)
+    # plot_error_different_refinements(all_results, output_folder, format)
+    # plot_error_different_timesteps(all_results, output_folder, format)
+    plot_time_step_vs_refinement(all_results, output_folder, format)
     return 0
 
 
