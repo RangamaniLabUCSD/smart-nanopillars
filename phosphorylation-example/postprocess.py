@@ -14,10 +14,14 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import re
+from itertools import cycle
 import json
 import phosphorylation_parser_args
 
 ntasks_pattern = re.compile("ntasks: (?P<n>\d)")
+cmap = plt.get_cmap("tab10")
+linestyles = ['-','--','-.',':']
+markers = ["", ".", "o"]
 
 hmin_hmax = {
     "curRadius_10_axisymmetric_refined_0": {
@@ -148,12 +152,16 @@ class Data(NamedTuple):
     
     @property
     def hmin(self) -> float:
-        return self.config.get("hmin", hmin_hmax[self.config["mesh_file"].split("/")[-1]]["hmin"])
-    
+        _hmin = self.config.get("hmin")
+        if _hmin is None:
+            return  hmin_hmax[self.config["mesh_file"].split("/")[-1]]["hmin"]
+        return _hmin
     @property
     def hmax(self) -> float:
-        return self.config.get("hmax", hmin_hmax[self.config["mesh_file"].split("/")[-1]]["hmax"])
-    
+        _hmax = self.config.get("hmax")
+        if _hmax is None:
+            return hmin_hmax[self.config["mesh_file"].split("/")[-1]]["hmax"]
+        return _hmax
 
     @property
     def refinement(self):
@@ -252,108 +260,123 @@ def analytical_solution(radius, D=10.0):
             * np.exp(-thieleMod)
         )
     )
+
     return (6 * C1 / radius) * (
         np.cosh(thieleMod) / thieleMod - np.sinh(thieleMod) / thieleMod**2
     )
 
 
 def plot_error_analytical_solution_different_radius(all_results, output_folder, format):
-
+    
+    radii = sorted({r.radius for r in all_results if r.ntasks == 1})
     diffusions = sorted({r.diffusion for r in all_results})
     refinements = sorted({r.refinement for r in all_results})
+    dts =  sorted({r.dt for r in all_results})
+    axisymmetrics = {r.axisymmetric for r in all_results}
 
-    for diffusion in diffusions:
-        for axisymmetric in [True, False]:
-            fig_steady, ax_steady = plt.subplots()
-            fig_percent, ax_percent = plt.subplots()
-            fig_l2, ax_l2 = plt.subplots()
-            fig_time, ax_time = plt.subplots()
-            for refinement in refinements:
-                results = list(
-                    sorted(
-                        filter(
-                            lambda d: d.refinement == refinement
-                            and np.isclose(d.dt, 0.01)
-                            and np.isclose(d.diffusion, diffusion)
-                            and (d.axisymmetric is axisymmetric),
-                            all_results,
-                        ),
-                        key=lambda d: d.radius,
+    fig, ax = plt.subplots(len(radii), len(diffusions), sharex=True, figsize=(10, 10))
+
+    for i, radius in enumerate(radii):
+        ax2 = ax[i, -1].twinx()
+        ax2.set_ylabel(f"Radius = {radius}")
+        ax2.set_yticks([])
+        
+        for j, diffusion in enumerate(diffusions):
+            ax[0, j].set_title(f"D = {diffusion}")
+
+        for diffusion in diffusions:
+            for axisymmetric in axisymmetrics:
+                # fig_steady, ax_steady = plt.subplots()
+                # fig_percent, ax_percent = plt.subplots()
+                # fig_l2, ax_l2 = plt.subplots()
+                # fig_time, ax_time = plt.subplots()
+                for refinement in refinements:
+        
+                    results = list(
+                        sorted(
+                            filter(
+                                lambda d: d.refinement == refinement
+                                and np.isclose(d.radius, radius)
+                                and np.isclose(d.diffusion, diffusion)
+                                and (d.axisymmetric is axisymmetric),
+                                all_results,
+                            ),
+                            key=lambda d: d.dt
+                        )
                     )
-                )
-                radiusVec = np.array([d.radius for d in results])
-                cA = analytical_solution(radiusVec, D=diffusion)
-                ss_vec = np.array([d.ss[-1] for d in results])
-                percentError = 100 * np.abs(ss_vec - cA) / cA
-                l2 = np.array([d.l2 for d in results])
-                total_run_time = [
-                    float(
-                        result.timings[
-                            result.timings["name"] == "phosphorylation-example"
-                        ].iloc[0]["wall tot"]
-                    )
-                    for result in results
-                ]
+                    radiusVec = np.array([d.radius for d in results])
+                    cA = analytical_solution(radiusVec, D=diffusion)
+                    ss_vec = np.array([d.ss[-1] for d in results])
+                    percentError = 100 * np.abs(ss_vec - cA) / cA
+                    l2 = np.array([d.l2 for d in results])
+                    total_run_time = [
+                        float(
+                            result.timings[
+                                result.timings["name"] == "phosphorylation-example"
+                            ].iloc[0]["wall tot"]
+                        )
+                        for result in results
+                    ]
 
-                ax_steady.plot(
-                    radiusVec,
-                    ss_vec,
-                    linestyle=":",
-                    marker="o",
-                    label=f"SMART simulation (refinement: {refinement})",
-                )
-                ax_percent.plot(
-                    radiusVec, percentError, label=f"refinement {refinement}"
-                )
-                ax_l2.semilogy(radiusVec, l2, label=f"refinement {refinement}")
-                rmse = np.sqrt(np.mean(percentError**2))
-                print(
-                    f"RMSE with respect to analytical solution = {rmse:.3f}% for refinement {refinement}, D: {diffusion}, axisymetric: {axisymmetric}"
-                )
-                ax_time.plot(radiusVec, total_run_time, marker="o")
+            #     ax_steady.plot(
+            #         radiusVec,
+            #         ss_vec,
+            #         linestyle=":",
+            #         marker="o",
+            #         label=f"SMART simulation (refinement: {refinement})",
+            #     )
+            #     ax_percent.plot(
+            #         radiusVec, percentError, label=f"refinement {refinement}"
+            #     )
+            #     ax_l2.semilogy(radiusVec, l2, label=f"refinement {refinement}")
+            #     rmse = np.sqrt(np.mean(percentError**2))
+            #     print(
+            #         f"RMSE with respect to analytical solution = {rmse:.3f}% for refinement {refinement}, D: {diffusion}, axisymetric: {axisymmetric}"
+            #     )
+            #     ax_time.plot(radiusVec, total_run_time, marker="o")
 
-            radiusTest = np.logspace(0, 1, 100)
-            cA_smooth = analytical_solution(radiusTest, D=diffusion)
-            ax_steady.plot(radiusTest, cA_smooth, label="Analytical solution")
+            # radiusTest = np.logspace(0, 1, 100)
+            # cA_smooth = analytical_solution(radiusTest, D=diffusion)
+            # ax_steady.plot(radiusTest, cA_smooth, label="Analytical solution")
 
-            ax_l2.set_xlabel("Cell radius (μm)")
-            ax_l2.set_ylabel("$ \| u_e - u \|^2$")
-            ax_l2.set_title("$\ell^2$ error from analytical solution")
-            ax_l2.legend()
-            fig_l2.savefig(
-                (
-                    output_folder
-                    / f"error_radius_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
-                )
-            )
-            plt.close(fig_l2)
+            # ax_l2.set_xlabel("Cell radius (μm)")
+            # ax_l2.set_ylabel("$ \| u_e - u \|^2$")
+            # ax_l2.set_title("$\ell^2$ error from analytical solution")
+            # ax_l2.legend()
+            # fig_l2.savefig(
+            #     (
+            #         output_folder
+            #         / f"error_radius_l2_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+            #     )
+            # )
+            # plt.close(fig_l2)
 
-            ax_time.set_xlabel("Cell radius (μm)")
-            ax_time.set_ylabel("Total run time [s]")
-            ax_time.legend()
-            fig_time.savefig(
-                output_folder
-                / f"total_time_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
-            )
-            plt.close(fig_time)
+            # ax_time.set_xlabel("Cell radius (μm)")
+            # ax_time.set_ylabel("Total run time [s]")
+            # ax_time.legend()
+            # fig_time.savefig(
+            #     output_folder
+            #     / f"total_time_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+            # )
+            # plt.close(fig_time)
 
-            ax_steady.set_xlabel("Cell radius (μm)")
-            ax_steady.set_ylabel("Steady state concentration (μM)")
-            ax_steady.legend()
-            fig_steady.savefig(
-                output_folder
-                / f"steady_state_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
-            )
-            plt.close(fig_steady)
+            # ax_steady.set_xlabel("Cell radius (μm)")
+            # ax_steady.set_ylabel("Steady state concentration (μM)")
+            # ax_steady.legend()
+            # fig_steady.savefig(
+            #     output_folder
+            #     / f"steady_state_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+            # )
+            # plt.close(fig_steady)
 
-            ax_percent.set_xlabel("Cell radius (μm)")
-            ax_percent.set_ylabel("Percent error from analytical solution")
-            ax_percent.legend()
-            fig_percent.savefig(
-                output_folder
-                / f"percent_error_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
-            )
-            plt.close(fig_percent)
+            # ax_percent.set_xlabel("Cell radius (μm)")
+            # ax_percent.set_ylabel("Percent error from analytical solution")
+            # ax_percent.legend()
+            # fig_percent.savefig(
+            #     output_folder
+            #     / f"percent_error_radius_diffusion_{diffusion}_axisymmetric_{axisymmetric}.{format}"
+            # )
+            # plt.close(fig_percent)
 
 
 def plot_error_different_refinements(all_results, output_folder, format):
@@ -508,14 +531,16 @@ def plot_error_different_timesteps(all_results, output_folder, format):
             plt.close(fig_time)
 
 
-def plot_time_step_vs_refinement(all_results, output_folder, format, axisymmetric=True):
+def plot_time_step_vs_refinement(all_results, output_folder, format, axisymmetric=False):
     radii = sorted({r.radius for r in all_results if r.ntasks == 1})
     diffusions = sorted({r.diffusion for r in all_results if r.ntasks == 1})
     refinements = sorted({r.refinement for r in all_results if r.ntasks == 1})
     time_steps = sorted({r.dt for r in all_results if r.ntasks == 1})
 
+    lines = []
+    labels = []
+
     fig, ax = plt.subplots(len(radii), len(diffusions), sharex=True, figsize=(10, 10))
-    
     for i, radius in enumerate(radii):
         ax2 = ax[i, -1].twinx()
         ax2.set_ylabel(f"Radius = {radius}")
@@ -537,15 +562,79 @@ def plot_time_step_vs_refinement(all_results, output_folder, format, axisymmetri
                             key=lambda d: d.dt,
                         )
                     )
+                
+                # print(refinement, [r.hmin for r in results])
+               
                 l2 = np.array([d.l2 for d in results])
                 dts = np.array([d.dt for d in results])
-                ax[i, j].loglog(dts, l2, marker="o", label=f"hmin {results[0].hmin:.3f}, hmax: {results[0].hmax:.3f},")
-                
+                if len(results) == 0:
+                    continue
+                ax[i, j].loglog(dts, l2, marker="o", label=f"hmin {results[0].hmin:.3f}, hmax: {results[0].hmax:.3f}")
+            
             ax[i, j].legend()
+            
+
+    fig.savefig(
+        output_folder / f"timestep_vs_refinement.{format}",
+        dpi=300,
+    )
+
+
+
+def plot_avg_aphos_vs_analytic(all_results, output_folder, format, axisymmetric=False):
+    radii = sorted({r.radius for r in all_results if r.ntasks == 1})
+    diffusions = sorted({r.diffusion for r in all_results if r.ntasks == 1})
+    refinements = sorted({r.refinement for r in all_results if r.ntasks == 1})
+    time_steps = sorted({r.dt for r in all_results if r.ntasks == 1})
+    fig, ax = plt.subplots(len(radii), len(diffusions), sharex=True, figsize=(15, 10))
+
+    
+    lines = []
+    labels = []
+    for i, radius in enumerate(radii):
+        ax2 = ax[i, -1].twinx()
+        ax2.set_ylabel(f"Radius = {radius}")
+        ax2.set_yticks([])
         
-    fig.savefig(output_folder / f"timestep_vs_refinement.{format}")
+        for j, diffusion in enumerate(diffusions):
+            ax[0, j].set_title(f"D = {diffusion}")
 
+            cA = analytical_solution(radius, D=diffusion)
+            
+            l, = ax[i,j].plot(all_results[0].t, np.ones_like(all_results[0].t) * cA, "k--")
+            if i == j == 0:
+                lines.append(l)
+                labels.append("analytical solution (steady state)")
+            for k, time_step in enumerate(time_steps):
+                results = list(
+                        sorted(
+                            filter(
+                                lambda d: np.isclose(d.radius, radius)
+                                and np.isclose(d.dt, time_step)
+                                and np.isclose(d.diffusion, diffusion)
+                                and (d.axisymmetric is axisymmetric),
+                                all_results,
+                            ),
+                            key=lambda d: d.refinement,
+                        )
+                    )
+                for ls, marker, r in zip(cycle(linestyles), cycle(markers), results):
+                    l, = ax[i, j].plot(r.t, r.ss, color=cmap(k), linestyle=ls, marker=marker)
+                    if i == j == 0:
+                        lines.append(l)
+                        labels.append(f"dt={r.dt:.1e}, refinement:{r.refinement}")
+             
+            
 
+    lgd = fig.legend(lines, labels, loc="center right")
+    fig.subplots_adjust(right=0.79)
+    fig.savefig(
+        output_folder / f"avg_aphos_vs_analytic.{format}",
+        bbox_extra_artists=(lgd,),
+        bbox_inches="tight",
+        dpi=300,
+    )
+    
 
 def main(
     results_folder: Path,
@@ -573,6 +662,7 @@ def main(
     # plot_error_different_refinements(all_results, output_folder, format)
     # plot_error_different_timesteps(all_results, output_folder, format)
     plot_time_step_vs_refinement(all_results, output_folder, format)
+    # plot_avg_aphos_vs_analytic(all_results, output_folder, format)
     return 0
 
 
