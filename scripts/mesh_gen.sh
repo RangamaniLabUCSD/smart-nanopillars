@@ -1,6 +1,6 @@
 echo "Saving mesh for mito example..."
-python3 main.py mito-preprocess --input-mesh-file /root/shared/gitrepos/smart-comp-sci/meshes/mito1_coarser2_mesh.xml \
---output-mesh-file /root/scratch/write-meshes/mito/meshes/mito_mesh.h5 --input-curv-file /root/shared/gitrepos/smart-comp-sci/meshes/mito1_coarser2_curvature.xml \
+python3 main.py mito-preprocess --input-mesh-file /root/shared/gitrepos/smart-comp-sci/meshes/mito1_mesh.xml \
+--output-mesh-file /root/scratch/write-meshes/mito/meshes/mito_mesh.h5 --input-curv-file /root/shared/gitrepos/smart-comp-sci/meshes/mito1_curvature.xml \
 --output-curv-file /root/scratch/write-meshes/mito/meshes/mito_curv.xdmf --single-compartment-im
 
 echo "Saving mesh for dendritic spine example..."

@@ -61,7 +61,17 @@ logger.info("Starting phosphorylation example")
 
 parser = argparse.ArgumentParser()
 add_phosphorylation_arguments(parser)
+# try:
 args = vars(parser.parse_args())
+# except:
+# args = {}
+# args["mesh_folder"] = pathlib.Path("/root/shared/gitrepos/smart-comp-sci/scripts/meshes-phosphorylation/curRadius_1_axisymmetric_refined_3")
+# args["outdir"] = pathlib.Path("/root/shared/gitrepos/smart-comp-sci/scripts/results-phosphorylation/curRadius_1_axisymmetric_refined_3")
+# args["time_step"] = 0.01
+# args["curRadius"] = 1.0
+# args["diffusion"] = 0.1
+# args["axisymmetric"] = True
+
 timer = d.Timer("phosphorylation-example")
 
 # Futhermore, you could also save the logs to a file by attaching a file handler to the logger as follows.
@@ -253,7 +263,7 @@ config_cur = config.Config()
 model_cur = model.Model(pc, sc, cc, rc, config_cur, parent_mesh)
 config_cur.flags.update(
     {
-        "axisymmetric_model": args["axisymmetric"],
+        "axisymmetric_model": False,#args["axisymmetric"],
     }
 )
 config_cur.solver.update(
@@ -284,13 +294,13 @@ for species_name, species in model_cur.sc.items:
     )
     results[species_name].write(model_cur.sc[species_name].u["u"], model_cur.t)
 
-results["A_proj"] = d.XDMFFile(
-    model_cur.mpi_comm_world, str(result_folder / f"A_proj.xdmf")
-)
-boundary_flux = model_cur.fc["r1 [Aphos (f)]"]
-surf_space = d.FunctionSpace(boundary_flux.surface.dolfin_mesh, "CG", 1)
-cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
-results["A_proj"].write(cur_interp, model_cur.t)
+# results["A_proj"] = d.XDMFFile(
+#     model_cur.mpi_comm_world, str(result_folder / f"A_proj.xdmf")
+# )
+# boundary_flux = model_cur.fc["r1 [Aphos (f)]"]
+# surf_space = d.FunctionSpace(boundary_flux.surface.dolfin_mesh, "CG", 1)
+# cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
+# results["A_proj"].write(cur_interp, model_cur.t)
 
 
 # model_cur.to_pickle(result_folder / "model_cur.pkl")
@@ -340,8 +350,8 @@ while True:
     for species_name, species in model_cur.sc.items:
         results[species_name].write(model_cur.sc[species_name].u["u"], model_cur.t)
     # results["A_proj"].write(model_cur.fc["r1 [Aphos (f)]"].proj_var["Aphos"], model_cur.t)
-    cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
-    results["A_proj"].write(cur_interp, model_cur.t)
+    # cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
+    # results["A_proj"].write(cur_interp, model_cur.t)
     # compute average Aphos concentration at each time step
     if args["axisymmetric"]:
         int_val = d.assemble_mixed(x[0]*model_cur.sc['Aphos'].u['u']*dx)

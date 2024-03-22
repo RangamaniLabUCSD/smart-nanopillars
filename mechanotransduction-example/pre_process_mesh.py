@@ -166,10 +166,7 @@ def main(
     mesh_folder = Path(mesh_folder)
     mesh_folder.mkdir(exist_ok=True, parents=True)
     mesh_file = mesh_folder / "spreadCell_mesh.h5"
-    if nanopillar_radius > 0.0:
-        mesh_tools.write_mesh(cell_mesh, facet_markers, cell_markers, mesh_file, [substrate_markers])
-    else:
-        mesh_tools.write_mesh(cell_mesh, facet_markers, cell_markers, mesh_file)
+    mesh_tools.write_mesh(cell_mesh, facet_markers, cell_markers, mesh_file, [substrate_markers])
     d.File(str(mesh_folder / "facets.pvd")) << facet_markers
     d.File(str(mesh_folder / "cells.pvd")) << cell_markers
     # save curvatures for reference

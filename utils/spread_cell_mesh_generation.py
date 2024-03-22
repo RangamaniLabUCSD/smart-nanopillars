@@ -422,9 +422,9 @@ def create_3dcell(
             if i > 0:
                 cur_line = gmsh.model.occ.add_line(inner_tag_list[-2], inner_tag_list[-1])
                 inner_line_list.append(cur_line)
-        # inner_spline_tag = gmsh.model.occ.add_spline(inner_tag_list)
+        inner_spline_tag = gmsh.model.occ.add_spline(inner_tag_list)
         symm_inner_tag = gmsh.model.occ.add_line(inner_tag_list[0], inner_tag_list[-1])
-        inner_loop_tag = gmsh.model.occ.add_curve_loop([*inner_line_list, symm_inner_tag])
+        inner_loop_tag = gmsh.model.occ.add_curve_loop([inner_spline_tag, symm_inner_tag])
         inner_plane_tag = gmsh.model.occ.add_plane_surface([inner_loop_tag])
         inner_shape = gmsh.model.occ.revolve([(2, inner_plane_tag)], 0, 0, 0, 0, 0, 1, 2*np.pi*sym_fraction)
         inner_shape_tags = []
