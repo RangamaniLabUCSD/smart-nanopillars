@@ -410,14 +410,27 @@ def mechanotransduction_example(
 
 
 def postprocess_mechanotransduction(
-    results_folder: Path, output_folder: Path, dry_run: bool = False, **kwargs
+    results_folder: Path,
+    output_folder: Path,
+    skip_if_processed: bool = False,
+    use_tex: bool = False,
+    dry_run: bool = False,
+    format: str = "png",
+    **kwargs,
 ):
     args = [
         "--results-folder",
         Path(results_folder).as_posix(),
         "--output-folder",
         Path(output_folder).as_posix(),
+        "--format",
+        format,
     ]
+    if skip_if_processed:
+        args.append("--skip-if-processed")
+    if use_tex:
+        args.append("--use-tex")
+        
     script = (
         (here / ".." / "mechanotransduction-example" / "postprocess.py")
         .absolute()
@@ -450,7 +463,7 @@ def preprocess_cru_mesh(
     ]
 
     script = (
-        (here / ".." / "ca2+-examples" / "pre_process_mesh_cru.py")
+        (here / ".." / "cru-example" / "pre_process_mesh_cru.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -488,7 +501,7 @@ def cru_example(
         args.extend(["--outdir", Path(outdir).as_posix()])
 
     script = (
-        (here / ".." / "ca2+-examples" / "cru.py")
+        (here / ".." / "cru-example" / "cru.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -520,7 +533,43 @@ def preprocess_spine_mesh(
     ]
 
     script = (
-        (here / ".." / "ca2+-examples" / "pre_process_mesh.py")
+        (here / ".." / "dendritic-spine-example" / "pre_process_mesh.py")
+        .absolute()
+        .resolve()
+        .as_posix()
+    )
+    run(
+        args=args,
+        dry_run=dry_run,
+        script=script,
+        submit_ex3=False,
+        submit_tscc=False,
+    )
+
+def dendritic_spine_postprocess(
+    results_folder: Path,
+    output_folder: Path,
+    skip_if_processed: bool = False,
+    use_tex: bool = False,
+    dry_run: bool = False,
+    format: str = "png",
+    **kwargs,
+):
+    args = [
+        "--results-folder",
+        Path(results_folder).as_posix(),
+        "--output-folder",
+        Path(output_folder).as_posix(),
+        "--format",
+        format,
+    ]
+    if skip_if_processed:
+        args.append("--skip-if-processed")
+    if use_tex:
+        args.append("--use-tex")
+
+    script = (
+        (here / ".." / "dendritic-spine-example" / "postprocess.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -556,7 +605,7 @@ def dendritic_spine_example(
         args.extend(["--outdir", Path(outdir).as_posix()])
 
     script = (
-        (here / ".." / "ca2+-examples" / "dendritic_spine.py")
+        (here / ".." / "dendritic-spine-example" / "dendritic_spine.py")
         .absolute()
         .resolve()
         .as_posix()
