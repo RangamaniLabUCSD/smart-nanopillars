@@ -8,7 +8,7 @@ ex3_template = dedent(
     """#!/bin/bash
 #SBATCH --job-name="{job_name}"
 #SBATCH --partition={partition}
-#SBATCH --time=3-00:00:00
+#SBATCH --time=6-00:00:00
 #SBATCH --ntasks={ntasks}
 #SBATCH --output=%j-%x-stdout.txt
 #SBATCH --error=%j-%x-stderr.txt
