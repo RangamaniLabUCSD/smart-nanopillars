@@ -87,6 +87,9 @@ def plot_data(data: list[Data], output_folder, format: str = "png"):
         e_vals.add(d.e_val)
         z_cutoffs.add(d.z_cutoff)
 
+    e_vals = sorted(list(e_vals))
+    z_cutoffs = sorted(list(z_cutoffs))
+    refinements = sorted(list(refinements))
    
     # Eval vs Cutoff
     x = np.arange(len(refinements))
@@ -121,6 +124,9 @@ def plot_data(data: list[Data], output_folder, format: str = "png"):
             ax_t[i, j].set_yscale("log")
             ax_t[i, j].set_xticks(x)
             ax_t[i, j].set_xticklabels(list(sorted(refinements)))
+            if i == len(e_vals) - 1:
+                ax_t[i, j].set_xlabel("Refinement")
+
 
             ax_yap[i, j].legend()
             ax_fac[i, j].legend()
