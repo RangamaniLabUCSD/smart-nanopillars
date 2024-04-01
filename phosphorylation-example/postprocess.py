@@ -14,11 +14,12 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import re
+from collections import Counter
 from itertools import cycle
 import json
 import phosphorylation_parser_args
 
-ntasks_pattern = re.compile("ntasks: (?P<n>\d)")
+ntasks_pattern = re.compile("ntasks: (?P<n>\d+)")
 cmap = plt.get_cmap("tab10")
 linestyles = ["-", "--", "-.", ":"]
 markers = ["", ".", "o"]
@@ -442,8 +443,6 @@ def plot_time_step_vs_refinement(
     width = 0.9 / len(refinements)
     rates = []
 
-    lines = []
-    labels = []
     fig, ax = plt.subplots(len(radii), len(diffusions), sharex=True, figsize=(10, 10))
     fig_t, ax_t = plt.subplots(
         len(radii), len(diffusions), sharex=True, figsize=(10, 10)
@@ -465,17 +464,18 @@ def plot_time_step_vs_refinement(
                             lambda d: np.isclose(d.radius, radius)
                             and d.refinement == refinement
                             and np.isclose(d.diffusion, diffusion)
+                            and d.ntasks == 1
                             and (d.axisymmetric is axisymmetric),
                             all_results,
                         ),
                         key=lambda d: d.dt,
                     )
                 )
-
-                # print(refinement, [r.hmin for r in results])
-
-                l2 = np.array([d.l2 for d in results])
+                if len(results) == 0:
+                    continue
+       
                 dts = np.array([d.dt for d in results])
+                l2 = np.array([d.l2 for d in results])
                 timings = np.array([d.user_run_time for d in results])
 
                 for r in results:
@@ -491,8 +491,7 @@ def plot_time_step_vs_refinement(
                         }
                     )
 
-                if len(results) == 0:
-                    continue
+                
                 ax[i, j].loglog(
                     dts,
                     l2,
@@ -600,6 +599,7 @@ def get_convergence_rates(all_results, output_folder, axisymmetric=False):
                             lambda d: np.isclose(d.radius, radius)
                             and d.refinement == refinement
                             and np.isclose(d.diffusion, diffusion)
+                            and d.ntasks == 1
                             and (d.axisymmetric is axisymmetric),
                             all_results,
                         ),
@@ -690,14 +690,61 @@ def get_convergence_rates(all_results, output_folder, axisymmetric=False):
 
 
 def plot_scalability(all_results, output_folder, format):
-    radii = sorted({r.radius for r in all_results if r.ntasks > 1})
-    diffusions = sorted({r.diffusion for r in all_results if r.ntasks > 1})
-    refinements = sorted({r.refinement for r in all_results if r.ntasks > 1})
-    time_steps = sorted({r.dt for r in all_results if r.ntasks > 1})
 
-    for r in all_results:
-        print(r.ntasks)
-    breakpoint()
+    all_ntasks = sorted({r.ntasks for r in all_results})
+    radius = 1.0
+    diffusion = 10.0
+    dt = 0.01
+    axisymmetric = False
+    x = np.arange(len(all_ntasks))
+    width = 0.45
+    fig, ax = plt.subplots(2, 2, sharex=True, sharey="row", figsize=(12, 10))
+    for i, refinement in enumerate([0, 3]):
+        results = list(
+            sorted(
+                filter(
+                    lambda d: np.isclose(d.radius, radius)
+                    and d.refinement == refinement
+                    and np.isclose(d.diffusion, diffusion)
+                    and np.isclose(d.dt, dt)
+                    and d.axisymmetric is axisymmetric,
+                    all_results,
+                ),
+                key=lambda d: d.ntasks,
+            )
+        )
+
+        l2 = np.array([d.l2 for d in results])
+        ntasks = np.array([d.ntasks for d in results])
+        sys_run_time = np.array([d.system_run_time for d in results])
+        user_run_time = np.array([d.user_run_time for d in results])
+
+       
+        ax[0, i].bar(x[np.isin(ntasks, all_ntasks)], sys_run_time, width, label="System run time")
+        ax[0, i].bar(x[np.isin(ntasks, all_ntasks)] + width, user_run_time, width, label="User run time")
+        ax[0, i].set_xticks(x + width / 2)
+        ax[0, i].set_xticklabels([f"{t:d}" for t in all_ntasks], rotation=45)
+        ax[0, i].set_yscale("log")
+        ax[0, i].set_xlabel("Number of tasks")
+        ax[1, i].bar(x[np.isin(ntasks, all_ntasks)], l2, width)
+        ax[1, i].set_xticks(x)
+        ax[1, i].set_xticklabels([f"{t:d}" for t in all_ntasks], rotation=45)
+        ax[1, i].set_yscale("log")
+        ax[1, i].set_xlabel("Number of tasks")
+        ax[1, i].set_ylim(1e-10, 1e-2)    
+        ax[0, i].set_title(f"Refinement {refinement}")
+
+        if i == 0:
+            ax[0, i].set_ylabel("Run time [s]")
+            ax[1, i].set_ylabel(r"$ \| u_e - u \|^2$")
+            ax[0, i].legend()
+        
+
+    fig.savefig(
+        output_folder / f"scalability.{format}",
+        dpi=300,
+    )
+
 
 
 def main(
@@ -728,11 +775,11 @@ def main(
     # plot_error_different_timesteps(all_results, output_folder, format)
         
 
-    # get_convergence_rates(all_results, output_folder)
+    get_convergence_rates(all_results, output_folder)
     plot_time_step_vs_refinement(all_results, output_folder, format)
-    # plot_avg_aphos_vs_analytic(all_results, output_folder, format)
+    plot_avg_aphos_vs_analytic(all_results, output_folder, format)
 
-    # plot_scalability(all_results, output_folder, format)
+    plot_scalability(all_results, output_folder, format)
     return 0
 
 
