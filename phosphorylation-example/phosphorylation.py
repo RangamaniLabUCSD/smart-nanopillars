@@ -188,7 +188,10 @@ Atot = Parameter("Atot", 1.0, vol_unit)
 kkin = Parameter("kkin", 50.0, 1 / sec)
 curRadius = args["curRadius"]  # first radius value to test
 # vol to surface area ratio of the cell (overwritten for each cell size)
-VolSA = Parameter("VolSA", curRadius / 3, um)
+if args["rect"]:
+    VolSA = Parameter("VolSA", curRadius / 20, um)
+else:
+    VolSA = Parameter("VolSA", curRadius / 3, um)
 r1 = Reaction(
     "r1",
     [],
@@ -365,11 +368,22 @@ k_kin = kkin.value
 k_p = kp.value
 cT = Atot.value
 D = Aphos.D
-thieleMod = curRadius / np.sqrt(D/k_p)
-C1 = k_kin*cT*curRadius**2/((3*D*(np.sqrt(k_p/D)-(1/curRadius)) + k_kin*curRadius)*np.exp(thieleMod) +
-                             (3*D*(np.sqrt(k_p/D)+(1/curRadius))-k_kin*curRadius)*np.exp(-thieleMod))
-sol = C1*(d.exp(r/np.sqrt(D/k_p))-d.exp(-r/np.sqrt(D/k_p)))/r
-L2norm = d.assemble_mixed((sol-model_cur.sc["Aphos"].u["u"])**2 *dx)
+if args["rect"]:
+    k_kin = kkin.value * VolSA.value
+    zSize = curRadius
+    zFactor = zSize / np.sqrt(D/k_p)
+    Az = (k_kin*zSize/(2*D))*np.exp(zFactor) / ((zFactor/2)*(np.exp(zFactor)-1) + (k_kin*zSize/(2*D))*(1+np.exp(zFactor)))
+    Bz = (k_kin*zSize/(2*D)) / ((zFactor/2)*(np.exp(zFactor)-1) + (k_kin*zSize/(2*D))*(1+np.exp(zFactor)))
+    expFactor = np.sqrt(k_p/(D))
+    sol = cT * ((Az*d.exp(-expFactor*xvec[2]) + Bz*d.exp(expFactor*xvec[2])))
+else:
+    thieleMod = curRadius / np.sqrt(D/k_p)
+    C1 = k_kin*cT*curRadius**2/((3*D*(np.sqrt(k_p/D)-(1/curRadius)) + k_kin*curRadius)*np.exp(thieleMod) +
+                                (3*D*(np.sqrt(k_p/D)+(1/curRadius))-k_kin*curRadius)*np.exp(-thieleMod))
+    sol = C1*(d.exp(r/np.sqrt(D/k_p))-d.exp(-r/np.sqrt(D/k_p)))/r
+    
+L2norm = np.sqrt(d.assemble_mixed((sol-model_cur.sc["Aphos"].u["u"])**2 *dx))
+
 
 logger.info("Done with solve loop")
 timer.stop()

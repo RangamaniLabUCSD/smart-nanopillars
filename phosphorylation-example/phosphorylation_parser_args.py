@@ -33,6 +33,11 @@ def add_phosphorylation_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--rect",
+        action="store_true",
+        default=False,
+    )
 
 
 def add_phosphorylation_preprocess_arguments(
@@ -48,6 +53,11 @@ def add_phosphorylation_preprocess_arguments(
     parser.add_argument("--num-refinements", type=int, default=0)
     parser.add_argument(
         "--axisymmetric",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--rect",
         action="store_true",
         default=False,
     )
