@@ -13,8 +13,7 @@ import pandas as pd
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
-import re
-from collections import Counter
+import rlcompleter
 from itertools import cycle
 import json
 import phosphorylation_parser_args
@@ -34,6 +33,7 @@ class Data(NamedTuple):
     stderr: str
     stdout: str
     ntasks: int
+
 
     @property
     def radius(self):
@@ -56,12 +56,17 @@ class Data(NamedTuple):
         return {k: pd.DataFrame(t) for k, t in self.timings_.items()}
 
     @property
-    def user_run_time(self) -> float:
+    def min_run_time(self) -> float:
         """Return the sum of the run time of all ranks."""
-        return sum(self.run_time_dict.values())
+        return min(self.run_time_dict.values())
+    
+    @property
+    def mean_run_time(self) -> float:
+        """Return the sum of the run time of all ranks."""
+        return np.mean(list(self.run_time_dict.values()))
 
     @property
-    def system_run_time(self) -> float:
+    def max_run_time(self) -> float:
         """Return the maximum run time of all ranks."""
         return max(self.run_time_dict.values())
 
@@ -231,7 +236,7 @@ def plot_error_analytical_solution_different_radius(all_results, output_folder, 
                     ss_vec = np.array([d.ss[-1] for d in results])
                     percentError = 100 * np.abs(ss_vec - cA) / cA
                     l2 = np.array([d.l2 for d in results])
-                    total_run_time = [result.user_run_time for result in results]
+                    total_run_time = [result.max_run_time for result in results]
 
                 ax_steady.plot(
                     radiusVec,
@@ -329,7 +334,7 @@ def plot_error_different_refinements(all_results, output_folder, format):
                 ax_l2.semilogy(refinements, l2, marker="o", label=radius)
                 ax_l2.set_xticks(refinements)
 
-                total_run_time = [result.user_run_time for result in results]
+                total_run_time = [result.max_run_time for result in results]
                 ax_time.semilogy(refinements, total_run_time, marker="o", label=radius)
                 ax_time.set_xticks(refinements)
 
@@ -399,7 +404,7 @@ def plot_error_different_timesteps(all_results, output_folder, format):
                 ax_l2.semilogy(dts, l2, marker="o", label=radius)
                 ax_l2.set_xticks(dts)
 
-                total_run_time = [result.user_run_time for result in results]
+                total_run_time = [result.max_run_time for result in results]
                 ax_time.semilogy(dts, total_run_time, marker="o", label=radius)
                 ax_time.set_xticks(dts)
 
@@ -476,7 +481,7 @@ def plot_time_step_vs_refinement(
        
                 dts = np.array([d.dt for d in results])
                 l2 = np.array([d.l2 for d in results])
-                timings = np.array([d.user_run_time for d in results])
+                timings = np.array([d.max_run_time for d in results])
 
                 for r in results:
                     rates.append(
@@ -697,8 +702,8 @@ def plot_scalability(all_results, output_folder, format):
     dt = 0.01
     axisymmetric = False
     x = np.arange(len(all_ntasks))
-    width = 0.45
-    fig, ax = plt.subplots(2, 2, sharex=True, sharey="row", figsize=(12, 10))
+    width = 0.9 / 3
+    fig, ax = plt.subplots(2, 2, sharex=True, figsize=(12, 10))
     for i, refinement in enumerate([0, 3]):
         results = list(
             sorted(
@@ -716,13 +721,19 @@ def plot_scalability(all_results, output_folder, format):
 
         l2 = np.array([d.l2 for d in results])
         ntasks = np.array([d.ntasks for d in results])
-        sys_run_time = np.array([d.system_run_time for d in results])
-        user_run_time = np.array([d.user_run_time for d in results])
-
-       
-        ax[0, i].bar(x[np.isin(ntasks, all_ntasks)], sys_run_time, width, label="System run time")
-        ax[0, i].bar(x[np.isin(ntasks, all_ntasks)] + width, user_run_time, width, label="User run time")
-        ax[0, i].set_xticks(x + width / 2)
+        # sys_run_time = np.array([d.system_run_time for d in results])
+        # user_run_time = np.array([d.user_run_time for d in results])
+        mean_run_time = np.array([d.mean_run_time for d in results])
+        min_run_time = np.array([d.min_run_time for d in results])
+        max_run_time = np.array([d.max_run_time for d in results])
+        # run_time_dict = [list(r.run_time_dict.values()) for r in results]
+        # breakpoint()
+        # run_time_dict
+        # ax[0, i].violinplot(run_time_dict)#, labels=[f"{t:d}" for t in ntasks])
+        ax[0, i].bar(x[np.isin(ntasks, all_ntasks)], max_run_time,  width, label="Max run time")
+        ax[0, i].bar(x[np.isin(ntasks, all_ntasks)] + width, mean_run_time, width, label="Mean run time")
+        ax[0, i].bar(x[np.isin(ntasks, all_ntasks)] + 2 * width, mean_run_time, width, label="Min run time")
+        ax[0, i].set_xticks(x + width)
         ax[0, i].set_xticklabels([f"{t:d}" for t in all_ntasks], rotation=45)
         ax[0, i].set_yscale("log")
         ax[0, i].set_xlabel("Number of tasks")
