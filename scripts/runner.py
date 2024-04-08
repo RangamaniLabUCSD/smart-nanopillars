@@ -113,6 +113,7 @@ def preprocess_phosphorylation_mesh(
     hEdge: float,
     num_refinements: int,
     axisymmetric: bool,
+    rect: bool,
     dry_run: bool,
     **kwargs,
 ):
@@ -128,6 +129,9 @@ def preprocess_phosphorylation_mesh(
     ]
     if axisymmetric:
         args.append("--axisymmetric")
+    
+    if rect:
+        args.append("--rect")
 
     script = (
         (here / ".." / "phosphorylation-example" / "pre_process_mesh.py")
@@ -150,6 +154,7 @@ def phosphorylation_example(
     time_step: float,
     curRadius: float,
     axisymmetric: bool,
+    rect: bool,
     diffusion: float = 10.0,
     dry_run: bool = False,
     submit_ex3: bool = False,
@@ -170,6 +175,9 @@ def phosphorylation_example(
     ]
     if axisymmetric:
         args.append("--axisymmetric")
+
+    if rect:
+        args.append("--rect")
 
     if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
