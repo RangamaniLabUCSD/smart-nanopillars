@@ -38,6 +38,21 @@ def add_phosphorylation_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--write-checkpoint",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--comparison-results-folder",
+        type=Path,
+        default="",
+    )
+    parser.add_argument(
+        "--comparison-mesh-folder",
+        type=Path,
+        default="",
+    )
 
 
 def add_phosphorylation_preprocess_arguments(

@@ -158,6 +158,9 @@ def phosphorylation_example(
     submit_tscc: bool = False,
     ntasks: int = 1,
     partition: str = "defq",
+    write_checkpoint: bool = False,
+    comparison_results_folder: Path = "",
+    comparison_mesh_folder: Path = "",
     **kwargs,
 ):
     args = [
@@ -169,12 +172,19 @@ def phosphorylation_example(
         curRadius,
         "--diffusion",
         diffusion,
+        "--comparison-results-folder",
+        comparison_results_folder,
+        "--comparison-mesh-folder",
+        comparison_mesh_folder,
     ]
     if axisymmetric:
         args.append("--axisymmetric")
 
     if rect:
         args.append("--rect")
+    
+    if write_checkpoint:
+        args.append("--write-checkpoint")
 
     if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])

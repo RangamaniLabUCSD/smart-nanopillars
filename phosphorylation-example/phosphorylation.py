@@ -99,11 +99,12 @@ vol_unit = uM
 # - cell_marker: integer marker value identifying each compartment in the parent mesh
 
 if args["axisymmetric"]:
-    Cyto = Compartment("Cyto", 2, um, 1)
-    PM = Compartment("PM", 1, um, 10)
+    parent_dim = 2
 else:
-    Cyto = Compartment("Cyto", 3, um, 1)
-    PM = Compartment("PM", 2, um, 10)
+    parent_dim = 3
+
+Cyto = Compartment("Cyto", parent_dim, um, 1)
+PM = Compartment("PM", parent_dim-1, um, 10)
 
 # Create a compartment container.
 
@@ -249,6 +250,20 @@ parent_mesh = mesh.ParentMesh(
     name="parent_mesh",
 )
 
+if args["comparison_results_folder"] != pathlib.Path(""):
+    comm = parent_mesh.mpi_comm
+    comparison_mesh = d.Mesh(comm)
+    mesh_filename = f'{str(args["comparison_mesh_folder"])}/DemoSphere.h5'
+    hdf5 = d.HDF5File(comparison_mesh.mpi_comm(), mesh_filename, "r")
+    hdf5.read(comparison_mesh, "/mesh", False)
+    cell_markers = d.MeshFunction("size_t", comparison_mesh, 2, value=0)
+    hdf5.read(cell_markers, f"/mf2")
+    hdf5.close()
+    cyto_comparison_mesh = d.create_meshview(cell_markers, 1)
+    Aphos_sol = d.Function(d.FunctionSpace(cyto_comparison_mesh, "P", 1))
+    comparison_file = d.XDMFFile(f"{str(args['comparison_results_folder'])}/Aphos.xdmf")
+    time_ref = np.loadtxt(f"{str(args['comparison_results_folder'])}/tvec.txt")
+
 # ## Initialize model and solver
 #
 # Now we modify the solver configuration for this problem. In the solver config, we set the final t as 1 s, the initial dt at .01 s (without any additional specifications, this will be the time step for the whole simulation), and the time precision (number of digits after the decimal point to round to) as 6.
@@ -262,7 +277,7 @@ config_cur.flags.update(
 )
 config_cur.solver.update(
     {
-        "final_t": 1,
+        "final_t": 1.0,
         "initial_dt": args["time_step"],
         "time_precision": 6,
     }
@@ -286,15 +301,11 @@ for species_name, species in model_cur.sc.items:
     results[species_name] = d.XDMFFile(
         model_cur.mpi_comm_world, str(result_folder / f"{species_name}.xdmf")
     )
-    results[species_name].write(model_cur.sc[species_name].u["u"], model_cur.t)
-
-results["A_proj"] = d.XDMFFile(
-    model_cur.mpi_comm_world, str(result_folder / f"A_proj.xdmf")
-)
-boundary_flux = model_cur.fc["r1 [Aphos (f)]"]
-surf_space = d.FunctionSpace(boundary_flux.surface.dolfin_mesh, "CG", 1)
-cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
-results["A_proj"].write(cur_interp, model_cur.t)
+    if args["write_checkpoint"]:
+        results[species_name].write_checkpoint(model_cur.sc[species_name].u["u"], 
+                                                   "u", model_cur.t, d.XDMFFile.Encoding.HDF5, False)
+    else:
+        results[species_name].write(model_cur.sc[species_name].u["u"], model_cur.t)
 
 
 # model_cur.to_pickle(result_folder / "model_cur.pkl")
@@ -335,6 +346,7 @@ else:
     volume = d.assemble_mixed(1.0 * dx)
 # Solve
 avg_Aphos = [Aphos.initial_condition]
+L2vec = [0]
 
 while True:
     logger.info(f"Solve for time step {model_cur.t}")
@@ -342,16 +354,31 @@ while True:
     model_cur.monolithic_solve()
     # Save results for post processing
     for species_name, species in model_cur.sc.items:
-        results[species_name].write(model_cur.sc[species_name].u["u"], model_cur.t)
-    # results["A_proj"].write(model_cur.fc["r1 [Aphos (f)]"].proj_var["Aphos"], model_cur.t)
-    cur_interp = d.interpolate(sc["Aphos"].u["u"], surf_space)
-    results["A_proj"].write(cur_interp, model_cur.t)
+        if args["write_checkpoint"]:
+            results[species_name].write_checkpoint(model_cur.sc[species_name].u["u"], 
+                                                   "u", model_cur.t, d.XDMFFile.Encoding.HDF5, True)
+        else:
+            results[species_name].write(model_cur.sc[species_name].u["u"], model_cur.t)
     # compute average Aphos concentration at each time step
     if args["axisymmetric"]:
         int_val = d.assemble_mixed(x[0]*model_cur.sc['Aphos'].u['u']*dx)
     else:
         int_val = d.assemble_mixed(model_cur.sc["Aphos"].u["u"] * dx)
     avg_Aphos.append(int_val / volume)
+
+    if args["comparison_results_folder"] != pathlib.Path(""):
+        test_idx = np.argmin(np.abs(time_ref - float(model_cur.t)))
+        comparison_file.read_checkpoint(Aphos_sol, "u", test_idx)
+        Aphos_sol.set_allow_extrapolation(True)
+        Aphos_proj = d.Function(sc["Aphos"].V)
+        vals = Aphos_proj.vector().get_local()
+        coords = sc["Aphos"].V.tabulate_dof_coordinates()
+        for i in range(len(coords)):
+            vals[i] = Aphos_sol(coords[i])
+        Aphos_proj.vector().set_local(vals)
+        Aphos_proj.vector().apply("insert")
+        L2vec.append(np.sqrt(d.assemble_mixed((Aphos_proj-model_cur.sc["Aphos"].u["u"])**2 *dx)))
+
     # End if we've passed the final time
     if model_cur.t >= model_cur.final_t:
         break
@@ -407,4 +434,5 @@ if model_cur.mpi_comm_world.rank == 0:
     np.savetxt(result_folder / "avg_Aphos.txt", avg_Aphos)
     np.savetxt(result_folder / "tvec.txt", model_cur.tvec)
     np.savetxt(result_folder / "L2norm.txt", np.array([L2norm]))
+    np.savetxt(result_folder / "L2vec.txt", np.array(L2vec))
     (result_folder / "timings.txt").write_text(timings)

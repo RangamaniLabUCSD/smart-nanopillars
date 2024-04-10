@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import json
 import phosphorylation_parser_args
+import re
 
 
 class Data(NamedTuple):
@@ -352,9 +353,23 @@ def main(
             json.dumps([r.to_json() for r in all_results], indent=4)
         )
 
+<<<<<<< Updated upstream
     plot_error_analytical_solution_different_radius(all_results, output_folder, format)
     plot_error_different_refinements(all_results, output_folder, format)
     plot_error_different_timesteps(all_results, output_folder, format)
+=======
+
+    # plot_error_analytical_solution_different_radius(all_results, output_folder, format)
+    plot_error_different_refinements(all_results, output_folder, format)
+    plot_error_different_timesteps(all_results, output_folder, format)
+        
+
+    get_convergence_rates(all_results, output_folder)
+    plot_time_step_vs_refinement(all_results, output_folder, format)
+    plot_avg_aphos_vs_analytic(all_results, output_folder, format)
+
+    plot_scalability(all_results, output_folder, format)
+>>>>>>> Stashed changes
     return 0
 
 
