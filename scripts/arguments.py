@@ -7,28 +7,35 @@ here = Path(__file__).parent.absolute()
 
 
 def dendritic_spine_example(parser: argparse.ArgumentParser):
-    sys.path.insert(0, (here / ".." / "ca2+-examples").as_posix())
+    sys.path.insert(0, (here / ".." / "dendritic-spine-example").as_posix())
     import dendritic_spine_args
 
     dendritic_spine_args.add_run_dendritic_spine_arguments(parser)
 
 
 def preprocess_spine_mesh(parser: argparse.ArgumentParser):
-    sys.path.insert(0, (here / ".." / "ca2+-examples").as_posix())
+    sys.path.insert(0, (here / ".." / "dendritic-spine-example").as_posix())
     import dendritic_spine_args
 
     dendritic_spine_args.add_preprocess_spine_mesh_arguments(parser)
 
 
+def postprocess_spine_mesh(parser: argparse.ArgumentParser):
+    sys.path.insert(0, (here / ".." / "dendritic-spine-example").as_posix())
+    import dendritic_spine_args
+
+    dendritic_spine_args.add_dendritic_spine_postprocess_arguments(parser)
+
+
 def cru_example(parser: argparse.ArgumentParser):
-    sys.path.insert(0, (here / ".." / "ca2+-examples").as_posix())
+    sys.path.insert(0, (here / ".." / "cru-example").as_posix())
     import cru_args
 
     cru_args.add_run_cru_arguments(parser)
 
 
 def preprocess_cru_mesh(parser: argparse.ArgumentParser):
-    sys.path.insert(0, (here / ".." / "ca2+-examples").as_posix())
+    sys.path.insert(0, (here / ".." / "cru-example").as_posix())
     import cru_args
 
     cru_args.add_preprocess_cru_mesh_arguments(parser)
@@ -142,6 +149,11 @@ def setup_parser() -> argparse.ArgumentParser:
         "dendritic-spine", help="Run dendritic spine example"
     )
     dendritic_spine_example(dendritic_spine_parser)
+
+    postprocess_spine_mesh_parser = subparsers.add_parser(
+        "dendritic-spine-postprocess", help="postprocess mesh for dendritic spine example"
+    )
+    postprocess_spine_mesh(postprocess_spine_mesh_parser)
 
     # CRU (calcium release unit)
     preprocess_cru_mesh_parser = subparsers.add_parser(

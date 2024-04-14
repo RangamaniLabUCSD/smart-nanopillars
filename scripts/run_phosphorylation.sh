@@ -1,4 +1,4 @@
-# Create meshes
+# # Create meshes
 # for radius in 1 2 4 6 8 10
 # do
 #     for refinement in 0 1 2
@@ -7,43 +7,42 @@
 #     done
 # done
 
-# Create axisymmetric meshes
-for radius in 1 2 4 6 8 10
-do
-    for refinement in 0 1 2
-    do
-        python3 main.py phosphorylation-preprocess --axisymmetric --curRadius $radius --num-refinements $refinement --mesh-folder "meshes-phosphorylation/curRadius_${radius}_axisymmetric_refined_${refinement}"
-    done
-done
+# # Create axisymmetric meshes
+# for radius in 1 2 4 6 8 10
+# do
+#     for refinement in 0 1 2
+#     do
+#         python3 main.py phosphorylation-preprocess --axisymmetric --curRadius $radius --num-refinements $refinement --mesh-folder "meshes-phosphorylation/curRadius_${radius}_axisymmetric_refined_${refinement}"
+#     done
+# done
 
 partition=defq
 
-# Diffusion, Refinements
-for radius in 1 2 4 6 8 10
+# # Diffusion, Refinements
+for radius in 1 2
 do
-    for refinement in 0 1 2
+    for refinement in 1 2 3 4
     do
-        for diffusion in 0.01 0.1 1.0 10.0 100.0
+        for diffusion in 0.01 10.0
         do
-            python3 main.py --partition=$partition  phosphorylation --diffusion $diffusion --curRadius $radius --mesh-folder "meshes-phosphorylation/curRadius_${radius}_refined_${refinement}" -o "results-phosphorylation/curRadius_${radius}_refined_${refinement}_diffusion_${diffusion}"
+            for time_step in 0.01 0.1 0.5 1.0
+            do
+                python3 main.py --submit-ex3 --partition=$partition  phosphorylation --diffusion $diffusion --curRadius $radius --time-step $time_step --mesh-folder  "meshes-phosphorylation/curRadius_${radius}_refined_${refinement}"
+                sleep 5
+            done
         done
     done
 done
 
-#Same with axissymetric
-for radius in 1 #2 4 6 8 10
+# # Run with MPI for D = 10.0, Raidus = 1 and 2 levels of refinement
+for refinement in 0 3
 do
-    for refinement in 0 1 2
+    for radius in 1
     do
-        for diffusion in 0.1 #0.01 0.1 1.0 10.0 100.0
+        for ntasks in 2 4 6 8 10 12 14 16
         do
-            python3 main.py --partition=$partition  phosphorylation --axisymmetric --diffusion $diffusion --curRadius $radius --mesh-folder "meshes-phosphorylation/curRadius_${radius}_axisymmetric_refined_${refinement}" -o "results-phosphorylation/curRadius_${radius}_axisymmetric_refined_${refinement}_diffusion_${diffusion}"
+            python3 main.py --submit-ex3 --ntasks $ntasks --partition=$partition  phosphorylation --diffusion 10.0 --curRadius $radius --mesh-folder "meshes-phosphorylation/curRadius_${radius}_refined_${refinement}"
+            sleep 5
         done
     done
-done
-
-# Run with MPI for D = 1, Raidus = 10 and 2 levels of refinement
-for ntasks in 2 4 6 8 10 12 14 16
-do
-    python3 main.py --ntasks $ntasks --partition=$partition  phosphorylation --diffusion 1.0 --curRadius 10 --mesh-folder "meshes-phosphorylation/curRadius_10_refined_2" -o "results-phosphorylation/curRadius_10_refined_2_diffusion_1.0_ntasks_${ntasks}"
 done
