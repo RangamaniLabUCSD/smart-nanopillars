@@ -261,7 +261,7 @@ def plot_error_analytical_solution_different_radius(all_results, output_folder, 
             ax_steady.plot(radiusTest, cA_smooth, label="Analytical solution")
 
             ax_l2.set_xlabel("Cell radius (μm)")
-            ax_l2.set_ylabel("$ \| u_e - u \|$")
+            ax_l2.set_ylabel("$ \| u_e - u \|_2$")
             ax_l2.set_title("$\ell^2$ error from analytical solution")
             ax_l2.legend()
             fig_l2.savefig(
@@ -350,7 +350,7 @@ def plot_error_different_refinements(all_results, output_folder, format):
 
             ax_l2.set_xlabel("Refinement")
             ax_l2.legend(title="Radius")
-            ax_l2.set_ylabel("$ \| u_e - u \|$")
+            ax_l2.set_ylabel("$ \| u_e - u \|_2$")
             fig_l2.savefig(
                 (
                     output_folder
@@ -419,7 +419,7 @@ def plot_error_different_timesteps(all_results, output_folder, format):
             plt.close(fig)
 
             ax_l2.set_xlabel("Time step [s]")
-            ax_l2.set_ylabel("$ \| u_e - u \|$")
+            ax_l2.set_ylabel("$ \| u_e - u \|_2$")
             fig_l2.savefig(
                 (
                     output_folder
@@ -477,6 +477,9 @@ def plot_time_step_vs_refinement(
                         key=lambda d: d.dt,
                     )
                 )
+
+                
+
                 if len(results) == 0:
                     continue
        
@@ -510,10 +513,16 @@ def plot_time_step_vs_refinement(
                     width,
                     label=f"refinement {refinement}",
                 )
+                if refinement == 0:
+                    # Use the point of the highest timestep to draw a line 
+                    # with the expected convergefnce rate
+                    # breakpoint()
+                    ax[i, j].loglog(dts, (dts ** 2) / dts[-1] * results[0].l2, "k--")
+
             ax[i, j].legend()
             ax_t[i, j].legend()
             ax[i, j].set_xlabel("Time step [s]")
-            ax[i, j].set_ylabel(r"$ \| u_e - u \|$")
+            ax[i, j].set_ylabel(r"$ \| u_e - u \|_2$")
             ax_t[i, j].set_xlabel("Time step [s]")
             ax_t[i, j].set_ylabel("Total run time [s]")
             ax_t[i, j].set_xticks(x + width * len(refinements) / 2)
@@ -748,7 +757,7 @@ def plot_scalability(all_results, output_folder, format):
 
         if i == 0:
             ax[0, i].set_ylabel("Run time [s]")
-            ax[1, i].set_ylabel(r"$ \| u_e - u \|$")
+            ax[1, i].set_ylabel(r"$ \| u_e - u \|_2$")
             ax[0, i].legend()
         
 

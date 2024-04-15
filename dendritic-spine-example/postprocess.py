@@ -19,7 +19,7 @@ class Data(NamedTuple):
     gradVec: np.ndarray
     
     @property
-    def mesh(self):
+    def mesh(self) -> str:
         return Path(self.config["mesh_file"]).stem
     
     
@@ -30,6 +30,12 @@ class Data(NamedTuple):
     @property
     def timings(self):
         return pd.DataFrame(self.timings_)
+    
+    @property
+    def num_refinements(self) -> int:
+        if "refined" in self.mesh:
+            return int(self.mesh.split("_")[-1])
+        return 0
     
     @property
     def total_run_time(self) -> float:
@@ -56,6 +62,7 @@ def load_all_data(main_path: Path):
         
         try:
             data = load_data(folder=folder)
+            print(data.mesh)
             print(f"Load data from folder {folder}")
         except FileNotFoundError as e:
             print(f"Skipping folder {folder}, due to {e}")
@@ -65,7 +72,9 @@ def load_all_data(main_path: Path):
     return all_data
 
 
-def plot_data(data: list[Data], output_folder, format: str = "png"):
+def plot_data(all_data: list[Data], output_folder, format: str = "png"):
+
+    data = [d for d in all_data if d.num_refinements == 0]
     fig, ax = plt.subplots(2, 3, sharex=True, sharey="row", figsize=(12, 8))
       
     mesh2index = {"1spine_mesh_coarser": 0, "1spine_mesh": 1, "2spine_mesh": 2}
@@ -107,6 +116,31 @@ def plot_data(data: list[Data], output_folder, format: str = "png"):
     ax_t.grid()
     fig_t.savefig((output_folder / "timings.png").with_suffix(f".{format}"))
 
+
+def plot_refinement_study(all_data: list[Data], output_folder, format: str = "png"):
+    data = sorted([d for d in all_data if "coarser" in d.mesh], key=lambda x: x.num_refinements)
+    dts = list(sorted({d.dt for d in data}))
+    plotted = set()
+    fig, ax = plt.subplots(2, len(dts), sharex=True, sharey="row", figsize=(12, 8))
+    lines = []
+    labels = []
+    for d in data:
+        index = dts.index(d.dt)
+        key = (d.num_refinements, index)
+        if key in plotted:
+            continue
+        plotted.add(key)
+        l, = ax[0, index].plot(d.t, d.concVec, label=d.num_refinements)
+        ax[1, index].plot(d.t, d.gradVec, label=d.num_refinements)
+        ax[0, index].set_title(f"dt = {d.dt}")
+        if index == 0:
+            lines.append(l)
+            labels.append(d.num_refinements)
+    ax[0, 0].set_ylabel("Average Cytosolic calcium (μM)")
+    ax[1, 0].set_ylabel("Average Gradient of Cytosolic calcium (μM)")
+    lgd = fig.legend(lines, labels, title="Number of refinements", loc="center right", bbox_to_anchor=(1.1, 0.5))
+    fig.subplots_adjust(right=0.9)
+    fig.savefig((output_folder / "refinement_study.png").with_suffix(f".{format}"), bbox_extra_artists=(lgd,), bbox_inches="tight")
         
 def load_timings(folder: Path) -> dict[str, Any]:
     timings = (folder / "timings.txt").read_text()
@@ -176,6 +210,7 @@ def main(results_folder: Path, output_folder: Path,
 
 
     plot_data(all_results, output_folder, format=format)
+    plot_refinement_study(all_results, output_folder, format=format)
     return 0
 
 if __name__ == "__main__":
