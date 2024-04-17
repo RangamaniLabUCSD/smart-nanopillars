@@ -120,7 +120,8 @@ def main(
                                                                         hEdge=hEdge, hInnerEdge=hInnerEdge,
                                                                         thetaExpr=shape2theta(shape),
                                                                         nanopillars=nanopillars,
-                                                                        return_curvature=True)        
+                                                                        return_curvature=True,
+                                                                        sym_fraction=1/8)        
         # # set zero flux boundaries
         # if sym_fraction < 1:
         #     for f in d.facets(cell_mesh):

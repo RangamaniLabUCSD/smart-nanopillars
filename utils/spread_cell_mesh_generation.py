@@ -24,7 +24,8 @@ def create_3dcell(
     nanopillars: Tuple[float, float, float] = [0, 0, 0],
     thetaExpr: str = "",
     use_tmp: bool = False,
-    roughness: Tuple[float, float] = [0, 0]
+    roughness: Tuple[float, float] = [0, 0],
+    sym_fraction: float = 1.0,
 ) -> Tuple[d.Mesh, d.MeshFunction, d.MeshFunction]:
     """
     Creates a 3d cell mesh.
@@ -94,7 +95,6 @@ def create_3dcell(
     RList = np.array([10, 13, 15, 20, 25, 30])
     scaleFactor = 0.82
     nucScaleFactor = 0.8
-    sym_fraction = 1/8
     aVecRef = aVecRef / scaleFactor**4
     cVecRef = cVecRef / scaleFactor
     dVecRef = dVecRef / scaleFactor**4
@@ -596,6 +596,180 @@ def create_3dcell(
         return (dmesh, mf2, mf3, substrate_markers, curv_markers)
     else:
         return (dmesh, mf2, mf3, substrate_markers)
+
+def create_substrate(
+    LBox: float = 20.0,
+    TBox: float = 1.0,
+    hEdge: float = 0,
+    outer_marker: int = 10,
+    outer_vol_tag: int = 1,
+    comm: MPI.Comm = d.MPI.comm_world,
+    verbose: bool = False,
+    nanopillars: Tuple[float, float, float] = [0, 0, 0],
+    use_tmp: bool = False,
+) -> Tuple[d.Mesh, d.MeshFunction, d.MeshFunction]:
+    """
+    Creates a 3d cell mesh.
+    The inner contour (e.g. nucleus or other organelle) is defined
+    implicitly through innerExpr, which is rotated about the z axis
+    to form an axisymmetric shape (e.g. unit sphere centered at (0, 2) 
+    defined by innerExpr = "r**2 + (z-2)**2 - 1")
+    The outer cell contour is defined in terms of 
+    cylindrical coordinates r, z, and theta.
+    It is assumed that r can be expressed as a function of z and theta.
+    If r = r1(z)T(theta), r1 is defined implicitly by outerExpr or innerExpr 
+    (e.g. circle with radius 5 defined by outerExpr = "r**2 + z**2 - 25")
+    and T is defined by thetaExpr (for an axisymmetric geometry, thetaExpr = "1")
+    It is assumed that substrate is present at z = 0, so if the curve extends
+    below z = 0 , there is a sharp cutoff.
+    
+    Some relevant examples that include theta dependence:
+    * thetaExpr = "T0 + T1*cos(5*theta)", where T0 and T1 are user-defined numbers, 
+        describes a five-pointed star geometry
+    * thetaExpr = "a*b/sqrt((b*cos(theta))**2 + (a*sin(theta))**2)", where a and b
+        are user-defined numbers, describes an ellipse contact region
+    
+    Special cases:
+    * thetaExpr = "rectAR", where AR is a number representing an aspect ratio,
+        defines a rectangular geometry at the cell contact region.
+    * thetaExpr not given or thetaExpr = "" -> define axisymmetric 3d geometry by
+        rotating the gmsh object
+
+    Args:
+        outerExpr: String implicitly defining an r-z curve for the outer surface
+        innerExpr: String implicitly defining an r-z curve for the inner surface
+        hEdge: maximum mesh size at the outer edge
+        hInnerEdge: maximum mesh size at the edge
+            of the inner compartment
+        interface_marker: The value to mark facets on the interface with
+        outer_marker: The value to mark facets on the outer ellipsoid with
+        inner_vol_tag: The value to mark the inner ellipsoidal volume with
+        outer_vol_tag: The value to mark the outer ellipsoidal volume with
+        comm: MPI communicator to create the mesh with
+        verbose: If true print gmsh output, else skip
+        return_curvature: If true, return curvatures as a vertex mesh function
+        nanopillars: tuple with nanopillar radius, height, spacing
+        thetaExpr: String defining the theta dependence of the outer shape
+        roughness: Tuple defining roughness parameters for pm and nm
+    Returns:
+        Tuple (mesh, facet_marker, cell_marker)
+    Or, if return_curvature = True, Returns:
+        Tuple (mesh, facet_marker, cell_marker, curvature_marker)
+    """
+    import gmsh
+    nanopillar_rad = nanopillars[0]
+    nanopillar_height = nanopillars[1]
+    nanopillar_spacing = nanopillars[2]
+    gmsh.initialize()
+    gmsh.option.setNumber("General.Terminal", int(verbose))
+    gmsh.model.add("3dcell")
+
+    # first add outer body and revolve
+    # rotate shape 2*pi in the case of no theta dependence
+    # LBox = 20
+    # TBox = 1
+    outer_shape = gmsh.model.occ.add_box(-LBox/2,-LBox/2,-TBox,LBox,LBox,TBox)
+    outer_shape = [(3, outer_shape)]
+    xSteric = 0.05
+    xCurv = 0.2
+    
+    if np.all(np.array(nanopillars) != 0):
+        num_pillars = np.ceil(LBox/nanopillar_spacing) + 1
+        rMax = nanopillar_spacing * np.ceil(LBox/nanopillar_spacing)
+        test_coords = np.linspace(-rMax/2, rMax/2, int(num_pillars))
+        xTest, yTest = np.meshgrid(test_coords, test_coords)
+        xTest = np.reshape(xTest, (len(xTest)**2))
+        yTest = np.reshape(yTest, (len(yTest)**2))
+        for i in range(len(xTest)):
+            # # add points and then rotate?
+            # np_tag_list = []
+            # np_line_list = []
+            # zCur = nanopillar_height + xSteric
+            # dtheta = np.pi/8
+            # thetaCurv1 = np.arange(np.pi/2, 0, -dtheta)
+            # xCurv1 = nanopillar_rad + xSteric*np.cos(thetaCurv1)
+            # zCurv1 = nanopillar_height + xSteric*(np.sin(thetaCurv1)-1)
+            # thetaCurv2 = np.arange(np.pi, 3*np.pi/2, dtheta)
+            # xCurv2 = nanopillar_rad + xSteric + xCurv*(1+np.cos(thetaCurv2))
+            # zCurv2 = xCurv*(1+np.sin(thetaCurv2))
+            # xCurVec = xTest[i] + np.concatenate((np.array([0]), xCurv1, 
+            #                                     np.array([nanopillar_rad+xSteric]), xCurv2, 
+            #                                     np.array([nanopillar_rad+xSteric+xCurv])))
+            # yCurVec = yTest[i] * np.ones([len(xCurVec),1])
+            # zCurVec = np.concatenate((np.array([nanopillar_height]), zCurv1, 
+            #                          np.array([nanopillar_height-xSteric]), zCurv2, 
+            #                          np.array([0])))
+            # for j in range(len(zCurVec)):
+            #     cur_tag = gmsh.model.occ.add_point(xCurVec[j], yCurVec[j], zCurVec[j])
+            #     if j > 0:
+            #         cur_line = gmsh.model.occ.add_line(cur_tag, np_tag_list[-1])
+            #         np_line_list.append(cur_line)
+            #     np_tag_list.append(cur_tag)
+
+            # # np_spline_tag = gmsh.model.occ.add_spline(np_tag_list)
+            # origin_np_tag = gmsh.model.occ.add_point(xTest[i], yTest[i], 0)
+            # bottom_np_tag = gmsh.model.occ.add_line(origin_np_tag, np_tag_list[-1])
+            # symm_np_tag = gmsh.model.occ.add_line(np_tag_list[0], origin_np_tag)
+            # np_loop_tag = gmsh.model.occ.add_curve_loop([*np_line_list, bottom_np_tag, symm_np_tag])
+            # np_plane_tag = gmsh.model.occ.add_plane_surface([np_loop_tag])
+            # np_shape = gmsh.model.occ.revolve([(2, np_plane_tag)], xTest[i], yTest[i], 0,
+            #                                   0, 0, 1, 2 * np.pi)
+
+            np_shape = gmsh.model.occ.add_cylinder(xTest[i], yTest[i], 0.0, 0, 0, nanopillar_height, nanopillar_rad)
+            # np_shape_tags = []
+            # for j in range(len(np_shape)):
+            #     if np_shape[j][0] == 3:  # pull out tags associated with 3d objects
+            #         np_shape_tags.append(np_shape[j][1])
+            # assert len(np_shape_tags) == 1  # should be just one 3D body from the full revolution
+            (outer_shape, outer_shape_map) = gmsh.model.occ.fuse(outer_shape, [(3, np_shape)])
+            outer_shape_list = []
+            # for j in range(len(outer_shape_map)):
+            #     if outer_shape_map[j]!=[]:
+            #         outer_shape_list.append(outer_shape_map[j][0])
+            # outer_shape = outer_shape_list
+
+    outer_shape_tags = []
+    for i in range(len(outer_shape)):
+        if outer_shape[i][0] == 3:  # pull out tags associated with 3d objects
+            outer_shape_tags.append(outer_shape[i][1])
+    assert len(outer_shape_tags) == 1  # should be just one 3D body from the full revolution
+    gmsh.model.occ.synchronize()
+    gmsh.model.add_physical_group(3, outer_shape_tags, tag=outer_vol_tag)
+    facets = gmsh.model.getBoundary([(3, outer_shape_tags[0])])
+    facet_tags = []
+    for i in range(len(facets)):
+        facet_tags.append(facets[i][1])
+    gmsh.model.add_physical_group(2, facet_tags, tag=outer_marker)
+
+    # def meshSizeCallback(dim, tag, x, y, z, lc):
+    #     return hEdge
+
+    # gmsh.model.mesh.setSizeCallback(meshSizeCallback)
+    # # set off the other options for mesh size determination
+    # gmsh.option.setNumber("Mesh.MeshSizeExtendFromBoundary", 0)
+    # gmsh.option.setNumber("Mesh.MeshSizeFromPoints", 0)
+    # gmsh.option.setNumber("Mesh.MeshSizeFromCurvature", 0)
+    # # this changes the algorithm from Frontal-Delaunay to Delaunay,
+    # # which may provide better results when there are larger gradients in mesh size
+    # gmsh.option.setNumber("Mesh.Algorithm", 5)
+
+    gmsh.model.mesh.generate(3)
+    rank = MPI.COMM_WORLD.rank
+    if use_tmp:
+        tmp_folder = pathlib.Path(f"/root/tmp/tmp_3dcell_{rank}")
+    else:
+        tmp_folder = pathlib.Path(f"tmp_3dcell_{rank}")
+    tmp_folder.mkdir(exist_ok=True)
+    gmsh_file = tmp_folder / "substrate.msh"
+    gmsh.write(str(gmsh_file))
+    gmsh.finalize()
+
+    # return dolfin mesh of max dimension (parent mesh) and marker functions mf2 and mf3
+    dmesh, mf2, mf3 = gmsh_to_dolfin(str(gmsh_file), tmp_folder, 3, comm)
+    # remove tmp mesh and tmp folder
+    gmsh_file.unlink(missing_ok=False)
+    tmp_folder.rmdir()
+    return dmesh, mf2, mf3
 
 
 def create_2Dcell(
