@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import mech_parser_args
+from mechanotransduction_ode import mechanotransduction_ode_calc
 
 
 class Data(NamedTuple):
@@ -118,7 +119,25 @@ def plot_data(data: list[Data], output_folder, format: str = "png"):
                 times.append(d.total_run_time)
                 ax_yap[i, j].plot(d.t, d.yap, label=f"refinement = {d.refinement}")
                 ax_fac[i, j].plot(d.t, d.fac, label=f"refinement = {d.refinement}")
-
+            
+            if well_mixed:
+                nuc_vol = 70.6
+                nm_area = 58.5
+                Ac = 133
+                # geoParam = [cyto_vol, nuc_vol, pm_area, nm_area, Ac]
+                geoParam = [1925.03/4, nuc_vol, 1294.5/4, nm_area, Ac]
+                var_names_all = ["Cofilin_P", "Fak", "mDia", "LaminA", "FActin", "RhoA_GTP", "mDia_A", "NPC_A", "GActin", "NPC",
+                        "ROCK_A", "Myo", "Cofilin_NP", "LaminA_p", "YAPTAZ_nuc", "pFak", "YAPTAZ_phos", "YAPTAZ", "RhoA_GDP", "LIMK",
+                        "Myo_A", "ROCK", "Positionboolean", "LIMK_A", "MRTF", "MRTF_nuc"]
+                ode_fac_idx = var_names_all.index("FActin")
+                ode_yap_idx = var_names_all.index("YAPTAZ_nuc")
+                # ode_yap_idx = [var_names_all.index(name) for name in ["YAPTAZ_nuc", "YAPTAZ_phos", "YAPTAZ"]]
+                # plot ode solution
+                t_ode, ode_results = mechanotransduction_ode_calc([0, 10000], e_val, geoParam)
+                ax_yap[i, j].plot(t_ode, ode_results[:,ode_yap_idx],#/(ode_results[:,ode_yap_idx[1]]+ode_results[:,ode_yap_idx[2]]), 
+                                linestyle='dashed', label=f"ODE solution")
+                ax_fac[i, j].plot(t_ode, ode_results[:,ode_fac_idx], 
+                                linestyle='dashed', label=f"ODE solution")
 
             ax_t[i, j].bar(x, times, width=0.3)
             ax_t[i, j].set_yscale("log")
@@ -126,7 +145,6 @@ def plot_data(data: list[Data], output_folder, format: str = "png"):
             ax_t[i, j].set_xticklabels(list(sorted(refinements)))
             if i == len(e_vals) - 1:
                 ax_t[i, j].set_xlabel("Refinement")
-
 
             ax_yap[i, j].legend()
             ax_fac[i, j].legend()
