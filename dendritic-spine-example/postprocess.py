@@ -320,17 +320,41 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
     error = dolfin.Function(V_coarsest)
 
     i = 0
+    errs = np.zeros(V_coarsest.dim())
+    max_errs = []
+    l2_errs = []
+    l1_errs = []
     while True:
-        with dolfin.XDMFFile((coarsest_data.folder / "Ca.xdmf").as_posix()) as f:
-            f.read_checkpoint(u_coarsest, "Ca", i)
-        with dolfin.XDMFFile((finest_data.folder / "Ca.xdmf").as_posix()) as f:
-            f.read_checkpoint(u_finest, "Ca", i)
+        try:
+            with dolfin.XDMFFile((coarsest_data.folder / "Ca.xdmf").as_posix()) as f:
+                f.read_checkpoint(u_coarsest, "Ca", i)
+            with dolfin.XDMFFile((finest_data.folder / "Ca.xdmf").as_posix()) as f:
+                f.read_checkpoint(u_finest, "Ca", i)
+        except RuntimeError:
+            break
 
-        # FIXME: This is not working
-        u_finest_on_coarsest.interpolate(u_finest)
-        # Compute the L_inf error between the two solutions on the coarsest mesh
-        error.vector()[:] = u_coarsest.vector() - u_finest_on_coarsest.vector()
-        error_norm = dolfin.norm(error, "linf")
+        for j, point in enumerate(V_coarsest.mesh().coordinates()):
+            errs[j] = u_coarsest(point) - u_finest(point)
+        i += 1
+        max_errs.append(np.linalg.norm(errs, ord=np.inf))
+        l2_errs.append(np.linalg.norm(errs))
+        l1_errs.append(np.linalg.norm(errs, ord=1))
+
+    # Save as text files
+    np.savetxt((output_folder / "max_errs.txt"), max_errs)
+    np.savetxt((output_folder / "l2_errs.txt"), l2_errs)
+    np.savetxt((output_folder / "l1_errs.txt"), l1_errs)
+
+    # Plot errors in three subplots
+    fig, ax = plt.subplots(3, 1, figsize=(8, 12))
+    ax[0].plot(max_errs)
+    ax[0].set_title("Max error")
+    ax[1].plot(l2_errs)
+    ax[1].set_title("L2 error")
+    ax[2].plot(l1_errs)
+    ax[2].set_title("L1 error")
+    fig.savefig((output_folder / "errors.png").with_suffix(f".{format}"))
+    plt.close(fig)
 
 
 def main(
