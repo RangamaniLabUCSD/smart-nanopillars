@@ -9,30 +9,53 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import mech_parser_args
+from mechanotransduction_ode import mechanotransduction_ode_calc
 
 
 class Data(NamedTuple):
-    timings: pd.DataFrame
+    timings_: dict[str, Any]
     config: dict[str, Any]
     t: np.ndarray
     yap: np.ndarray
     fac: np.ndarray
-
-    @property
-    def enforce_mass_conservation(self) -> bool:
-        return self.config.get("flags", {}).get("enforce_mass_conservation", False)
     
     @property
-    def num_refinements(self) -> int:
-        return int(Path(self.config["mesh_file"]).name.split("_")[-1])
+    def refinement(self):
+        return int(self.config["mesh_file"].split("refined_")[-1][0])
+    
+    @property
+    def e_val(self):
+        return self.config["e_val"]
+    
+    @property
+    def z_cutoff(self):
+        return self.config["z_cutoff"]
+    
+    @property
+    def well_mixed(self):
+        return self.config.get("well_mixed", False)
     
     @property
     def dt(self) -> float:
         return self.config["solver"]["initial_dt"]
     
     @property
+    def timings(self):
+        return pd.DataFrame(self.timings_)
+    
+    @property
     def total_run_time(self) -> float:
         return self.timings[self.timings["name"] == "mechanotransduction-example"]["wall tot"].values[0]
+    
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "t": self.t.tolist(),
+            "yap": self.yap.tolist(),
+            "fac": self.fac.tolist(),
+            "config": self.config,
+            "timings_": self.timings_,
+        }
+
 
 
 def load_all_data(main_path: Path):
@@ -48,82 +71,92 @@ def load_all_data(main_path: Path):
         all_data.append(data)
     return all_data
 
-def is_default(d: Data) -> bool:
-    return np.isclose(d.dt, 0.01) and d.enforce_mass_conservation and d.num_refinements == 0
 
-def plot_data(data: list[Data], output_folder):
+def plot_data(data: list[Data], output_folder, format: str = "png"):
     fig, ax = plt.subplots(2, 3, sharex=True, sharey="row", figsize=(12, 8))
     fig_t, ax_t = plt.subplots(1, 3, sharey=True, figsize=(12, 4))    
     linestyles = [cycle(["-", "--", ":", "-."]) for _ in range(3)]
 
-    # Get the default data
-    default_data = next(d for d in data if is_default(d))
+    # Plot 
+    refinements = set()
+    e_vals = set()
+    z_cutoffs = set()
 
-    # Plot the temporal convergence
-    temporal_convergence_data = sorted([default_data] + [di for di in data if not is_default(di) and not np.isclose(di.dt, 0.01)], key=lambda x: x.dt)
-    for d in temporal_convergence_data:
-        ax[0, 0].plot(d.t, d.yap, linestyle=next(linestyles[0]), label=f'dt={d.dt}')
-        ax[1, 0].plot(d.t, d.fac, linestyle=next(linestyles[0]), label=f'dt={d.dt}')
+    for d in data:
+        print(d.refinement, d.dt, d.e_val, d.z_cutoff, d.well_mixed)
+        refinements.add(d.refinement)
+        e_vals.add(d.e_val)
+        z_cutoffs.add(d.z_cutoff)
 
-    x = np.arange(len(temporal_convergence_data))
-    ax_t[0].bar(x, [d.total_run_time for d in temporal_convergence_data])
-    ax_t[0].set_xticks(x)
-    ax_t[0].set_xticklabels([d.dt for d in temporal_convergence_data])
-    ax_t[0].set_xlabel("dt")
-    ax_t[0].set_title("Temporal convergence")
-    ax_t[0].set_ylabel("Time [s]")
-        
-    # Plot the spatial convergence
-    spatial_convergence_data = sorted([default_data] + [di for di in data if not is_default(di) and di.num_refinements > 0], key=lambda x: x.num_refinements)
-    for d in spatial_convergence_data:
-        ax[0, 1].plot(d.t, d.yap, linestyle=next(linestyles[1]), label=f'# refinements = {d.num_refinements}')
-        ax[1, 1].plot(d.t, d.yap, linestyle=next(linestyles[1]), label=f'# refinements = {d.num_refinements}')
+    e_vals = sorted(list(e_vals))
+    z_cutoffs = sorted(list(z_cutoffs))
+    refinements = sorted(list(refinements))
+   
+    # Eval vs Cutoff
+    x = np.arange(len(refinements))
+    fig_yap, ax_yap = plt.subplots(len(e_vals), 2, sharex=True, sharey="row", figsize=(10, 10))
+    fig_fac, ax_fac = plt.subplots(len(e_vals), 2, sharex=True, sharey="row", figsize=(10, 10))
+    fig_t, ax_t = plt.subplots(len(e_vals), 2, sharex=True, sharey="row", figsize=(10, 10))
+    for i, e_val in enumerate(e_vals):
+        ax2 = ax_yap[i, -1].twinx()
+        ax2.set_yticks([])
+        ax2.set_ylabel(f"e val = {e_val}")
 
-    x = np.arange(len(spatial_convergence_data))
-    ax_t[1].bar(x, [d.total_run_time for d in spatial_convergence_data])
-    ax_t[1].set_xticks(x)
-    ax_t[1].set_xticklabels([d.num_refinements for d in spatial_convergence_data])
-    ax_t[1].set_xlabel("# refinements")
-    ax_t[1].set_title("Spatial convergence")
+        ax2 = ax_fac[i, -1].twinx()
+        ax2.set_yticks([])
+        ax2.set_ylabel(f"e val = {e_val}")
+
+        ax2 = ax_t[i, -1].twinx()
+        ax2.set_yticks([])
+        ax2.set_ylabel(f"e val = {e_val}")
+        for j, well_mixed in enumerate([True, False]):
+            ax_yap[0, j].set_title(f"well mixed = {well_mixed}")
+            ax_fac[0, j].set_title(f"well mixed = {well_mixed}")
+            ax_t[0, j].set_title(f"well mixed = {well_mixed}")
+            times = []
+       
+            for d in sorted([di for di in data if di.e_val == e_val and di.well_mixed is well_mixed], key=lambda x: x.refinement):
+                times.append(d.total_run_time)
+                ax_yap[i, j].plot(d.t, d.yap, label=f"refinement = {d.refinement}")
+                ax_fac[i, j].plot(d.t, d.fac, label=f"refinement = {d.refinement}")
+            
+            if well_mixed:
+                nuc_vol = 70.6
+                nm_area = 58.5
+                Ac = 133
+                # geoParam = [cyto_vol, nuc_vol, pm_area, nm_area, Ac]
+                geoParam = [1925.03/4, nuc_vol, 1294.5/4, nm_area, Ac]
+                var_names_all = ["Cofilin_P", "Fak", "mDia", "LaminA", "FActin", "RhoA_GTP", "mDia_A", "NPC_A", "GActin", "NPC",
+                        "ROCK_A", "Myo", "Cofilin_NP", "LaminA_p", "YAPTAZ_nuc", "pFak", "YAPTAZ_phos", "YAPTAZ", "RhoA_GDP", "LIMK",
+                        "Myo_A", "ROCK", "Positionboolean", "LIMK_A", "MRTF", "MRTF_nuc"]
+                ode_fac_idx = var_names_all.index("FActin")
+                ode_yap_idx = var_names_all.index("YAPTAZ_nuc")
+                # ode_yap_idx = [var_names_all.index(name) for name in ["YAPTAZ_nuc", "YAPTAZ_phos", "YAPTAZ"]]
+                # plot ode solution
+                t_ode, ode_results = mechanotransduction_ode_calc([0, 10000], e_val, geoParam)
+                ax_yap[i, j].plot(t_ode, ode_results[:,ode_yap_idx],#/(ode_results[:,ode_yap_idx[1]]+ode_results[:,ode_yap_idx[2]]), 
+                                linestyle='dashed', label=f"ODE solution")
+                ax_fac[i, j].plot(t_ode, ode_results[:,ode_fac_idx], 
+                                linestyle='dashed', label=f"ODE solution")
+
+            ax_t[i, j].bar(x, times, width=0.3)
+            ax_t[i, j].set_yscale("log")
+            ax_t[i, j].set_xticks(x)
+            ax_t[i, j].set_xticklabels(list(sorted(refinements)))
+            if i == len(e_vals) - 1:
+                ax_t[i, j].set_xlabel("Refinement")
+
+            ax_yap[i, j].legend()
+            ax_fac[i, j].legend()
+            ax_t[i, j].legend()
+
+    fig_yap.savefig((Path(output_folder) / "yap").with_suffix(f".{format}"))
+    fig_fac.savefig((Path(output_folder) / "fac").with_suffix(f".{format}"))
+    fig_t.savefig((Path(output_folder) / "timings").with_suffix(f".{format}"))
     
 
-    # Plot mass conservation
-    mass_conservation_data = next(d for d in data if d.enforce_mass_conservation)
-    ax[0, 2].plot(default_data.t, default_data.yap, linestyle=next(linestyles[2]), label='no mass conservation')
-    ax[0, 2].plot(mass_conservation_data.t, mass_conservation_data.yap, linestyle=next(linestyles[2]), label='mass conservation')
-    ax[1, 2].plot(default_data.t, default_data.fac, linestyle=next(linestyles[2]), label='no mass conservation')
-    ax[1, 2].plot(mass_conservation_data.t, mass_conservation_data.fac, linestyle=next(linestyles[2]), label='mass conservation')
-    x = np.arange(2)
-    ax_t[2].bar(x, [default_data.total_run_time, mass_conservation_data.total_run_time])
-    ax_t[2].set_xticks(x)
-    ax_t[2].set_xticklabels(["No", "Yes"])
-    ax_t[2].set_xlabel("Mass conservation")
-    ax_t[2].set_title("Mass conservation")
-
-    for axi in ax.flatten():
-        axi.legend()
-        # axi.set_ylabel("[Ca$^{2+}$]")
-
-    for axi in ax_t:
-        axi.grid()
-        axi.set_yscale("log")
-        axi.set_ylim(1e3, 3e5)
-
-    ax[0, 0].set_ylabel("YAPTAZ_nuc")
-    ax[1, 0].set_ylabel("FActin")
-    ax[0, 0].set_title("Temporal convergence")
-    ax[0, 1].set_title("Spatial convergence (dt = 0.01)")
-    ax[0, 2].set_title("Mass conservation")
-    for i in range(2):
-        ax[1, i].set_xlabel("Time [s]")
-
-    Path(output_folder).mkdir(exist_ok=True, parents=True)
-    fig.savefig(Path(output_folder) / "mechanotransduction_yap.png")
-    fig_t.savefig(Path(output_folder) / "timings_mechanotransduction.png")
-
-
         
-def load_timings(folder: Path):
+def load_timings(folder: Path) -> dict[str, Any]:
     timings = (folder / "timings.txt").read_text()
 
     # # Read total run time from the start and end timestamp from the logs
@@ -144,7 +177,7 @@ def load_timings(folder: Path):
 
     # item = ["Total run time", 1] + [total_run_time] * (len(header) - 2)
     data.append(dict(zip(header, item)))
-    return pd.DataFrame(data)
+    return data
 
 
 
@@ -165,13 +198,33 @@ def load_data(folder: Path = Path("82094")) -> Data:
     config = json.loads(config_file.read_text())
     timings = load_timings(folder=folder)
 
-    return Data(timings=timings, config=config, t=t, yap=yap, fac=fac)
+    return Data(timings_=timings, config=config, t=t, yap=yap, fac=fac)
     
-def main(results_folder: Path, output_folder: Path) -> int:
-    # data = load_all_data("/global/D1/homes/henriknf/smart-comp-sci/mechanotransduction/first_run")
-    data = load_all_data(results_folder)
-    plot_data(data, output_folder)
+def main(results_folder: Path, output_folder: Path, 
+         format: str = "png",
+         skip_if_processed: bool = False,
+         use_tex: bool = False,
+    ) -> int:
     
+    plt.rcParams["text.usetex"] = use_tex
+
+    output_folder.mkdir(exist_ok=True, parents=True)
+    results_file = output_folder / "results_mechanotransduction.json"
+
+    if skip_if_processed and results_file.is_file():
+        print(f"Load results from {results_file}")
+        all_results = [Data(**r) for r in json.loads(results_file.read_text())]
+    else:
+        print(f"Gather results from {results_folder}")
+        all_results = load_all_data(results_folder)
+        print(f"Save results to {results_file.absolute()}")
+        results_file.write_text(
+            json.dumps([r.to_json() for r in all_results], indent=4)
+        )
+
+
+    plot_data(all_results, output_folder, format=format)
+    return 0
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

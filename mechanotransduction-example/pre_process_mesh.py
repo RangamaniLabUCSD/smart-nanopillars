@@ -78,7 +78,7 @@ def main(
     hEdge: float = 0.6,
     hInnerEdge: float = 0.6,
     num_refinements: int = 0,
-    full_3d = False,
+    full_3d=False,
 ):
     here = Path(__file__).parent.absolute()
     sys.path.append((here / ".." / "utils").as_posix())
@@ -92,20 +92,18 @@ def main(
 
     # initialize current mesh
     if sym_fraction == 0:
-        cell_mesh, facet_markers, cell_markers, curv_markers = mesh_gen.create_2Dcell(
+        cell_mesh, facet_markers, cell_markers = mesh_gen.create_2Dcell(
             outerExpr=outerExpr13,
             innerExpr=innerExpr13,
             hEdge=hEdge,
             hInnerEdge=hInnerEdge,
             half_cell=True,
-            return_curvature=True,
         )
-        cell_mesh, cell_markers, facet_markers, curv_markers = refine(
+        cell_mesh, cell_markers, facet_markers, _ = refine(
             cell_mesh,
             cell_markers,
             facet_markers,
             num_refinements,
-            curv_markers=curv_markers,
         )
     else:
         cell_mesh, facet_markers, cell_markers = mesh_gen.create_3dcell(
@@ -126,10 +124,6 @@ def main(
             if topology == "boundary":
                 facet_markers.set_value(f.index(), 10)
 
-        curv_markers = mesh_tools.compute_curvature(
-            cell_mesh, facet_markers, cell_markers, [10, 12], [1, 2]
-        )
-
         # if applicable, define symmetries of current model
         if sym_fraction < 1:
             for c in d.cells(cell_mesh):
@@ -144,10 +138,6 @@ def main(
     mesh_folder.mkdir(exist_ok=True, parents=True)
     mesh_file = mesh_folder / "spreadCell_mesh.h5"
     mesh_tools.write_mesh(cell_mesh, facet_markers, cell_markers, mesh_file)
-    # save curvatures for reference
-    curv_file_name = mesh_folder / "curvatures.xdmf"
-    with d.XDMFFile(str(curv_file_name)) as curv_file:
-        curv_file.write(curv_markers)
 
 
 if __name__ == "__main__":
