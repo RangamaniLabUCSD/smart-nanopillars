@@ -118,7 +118,6 @@ def main(
             cell_mesh, cell_markers, facet_markers, num_refinements
         )
 
-        # nanopillars=[0.5, 2.0, 2.0])
         for f in d.facets(cell_mesh):
             topology, cellIndices = mesh_tools.facet_topology(f, cell_markers)
             if topology == "boundary":

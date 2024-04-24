@@ -22,10 +22,9 @@ def create_3dcell(
     comm: MPI.Comm = d.MPI.comm_world,
     verbose: bool = False,
     return_curvature: bool = False,
-    nanopillars: Tuple[float, float, float] = "",
     thetaExpr: str = "",
     use_tmp: bool = False,
-    roughness: Tuple[float, float] = [0, 0]
+    dcurv: float = 0.1,
 ) -> Tuple[d.Mesh, d.MeshFunction, d.MeshFunction]:
     """
     Creates a 3d cell mesh.
@@ -67,9 +66,8 @@ def create_3dcell(
         comm: MPI communicator to create the mesh with
         verbose: If true print gmsh output, else skip
         return_curvature: If true, return curvatures as a vertex mesh function
-        nanopillars: tuple with nanopillar radius, height, spacing
         thetaExpr: String defining the theta dependence of the outer shape
-        roughness: Tuple defining roughness parameters for pm and nm
+        dcurv: curving parameter for rectangular shape
     Returns:
         Tuple (mesh, facet_marker, cell_marker)
     Or, if return_curvature = True, Returns:
@@ -135,6 +133,31 @@ def create_3dcell(
                     scaleVec.append(np.abs(a_rect / (2*np.cos(thetaVec[j]))))
                 else:
                     scaleVec.append(np.abs(b_rect / (2*np.sin(thetaVec[j]))))
+                if dcurv > 0:
+                    # smooth corners
+                    xCur = np.cos(thetaVec[j])*scaleVec[j]
+                    yCur = np.sin(thetaVec[j])*scaleVec[j]
+                    if np.abs(xCur) > (a_rect/2 - dcurv) and np.abs(yCur) > (b_rect/2 - dcurv):
+                        x1 = np.sign(xCur)*(a_rect/2 - dcurv)
+                        y1 = np.sign(yCur)*(b_rect/2 - dcurv)
+                        aPoly = dcurv**2 * (1 + np.tan(thetaVec[j])**2)
+                        bPoly = 2*dcurv*np.tan(thetaVec[j])*(x1*np.tan(thetaVec[j])-y1)
+                        cPoly = np.tan(thetaVec[j])*(-2*x1*y1+x1**2*np.tan(thetaVec[j]))+y1**2-dcurv**2
+                        root1 = (-bPoly + np.sqrt(bPoly**2 - 4*aPoly*cPoly))/(2*aPoly)
+                        root2 = (-bPoly - np.sqrt(bPoly**2 - 4*aPoly*cPoly))/(2*aPoly)
+                        if x1 > 0:
+                            rootVal = root1
+                        else:
+                            rootVal = root2
+                        if np.abs(rootVal) <= 1:
+                            cosCur = rootVal
+                            thetaCircle = np.sign(yCur)*np.arccos(cosCur)
+                            xCircle = x1 + dcurv*np.cos(thetaCircle)
+                            yCircle = y1 + dcurv*np.sin(thetaCircle)
+                            scaleVec[j] *= np.sqrt(xCircle**2+yCircle**2)/np.sqrt(xCur**2 + yCur**2)
+                        else:
+                            raise ValueError(f"Unable to smooth corners for {thetaExpr}")
+
         else:
             thetaVec = np.linspace(0.0, 2*np.pi, num_theta)
             thetaVec[-1] = 0.0 # for exactness, replace 2*pi with 0.0
@@ -178,42 +201,13 @@ def create_3dcell(
                     else:
                         # average out sharp edges (cell becomes more and more ellipsoidal
                         # away from the substrate)
-                        xValRef = rValsOuter[i]*scaleVec[j]*np.cos(thetaVec[j])
-                        yValRef = rValsOuter[i]*scaleVec[j]*np.sin(thetaVec[j])
-                        xValSmooth = rValsOuter[i]*scaleVecSmooth[j]*np.cos(thetaVec[j])
-                        yValSmooth =rValsOuter[i]*scaleVecSmooth[j]*np.sin(thetaVec[j])
                         zScale1 = (zMax - zValsOuter[i])/zMax
                         zScale2 = zValsOuter[i]/zMax
-                        xCur, yCur, zCur = (zScale1*xValRef + zScale2*xValSmooth, 
-                                            zScale1*yValRef + zScale2*yValSmooth, 
-                                            zValsOuter[i])
-                        if roughness[0] > 0:
-                            # define deformation field over surface from smooth function
-                            max_wavelength = 5.0
-                            zDev = 0
-                            for m in range(20):
-                                for n in range(20):
-                                    xArg = 2*np.pi*xCur*(m+1)/max_wavelength
-                                    yArg = 2*np.pi*yCur*(n+1)/max_wavelength
-                                    u1 = 1#rand_rough[m,n]
-                                    u2 = np.sqrt(1 - u1**2)
-                                    curMag = 2*roughness[0] / ((m+1)**2 + (n+1)**2) 
-                                    zDev = zDev + curMag * (u1 * (np.cos(xArg)*np.cos(yArg) + np.sin(xArg)*np.sin(yArg)) +
-                                                            u2 * (np.sin(xArg)*np.cos(yArg) + np.cos(xArg)*np.sin(yArg)))
-                                    xArg_neg = 2*np.pi*xCur*(-m-1)/max_wavelength
-                                    yArg_neg = 2*np.pi*yCur*(-n-1)/max_wavelength
-                                    u1_neg = 1#rand_rough_neg[m,n]
-                                    u2_neg = np.sqrt(1 - u1**2)
-                                    zDev = zDev + curMag * (u1_neg * (np.cos(xArg_neg)*np.cos(yArg_neg) + np.sin(xArg_neg)*np.sin(yArg_neg)) +
-                                                            u2_neg * (np.sin(xArg_neg)*np.cos(yArg_neg) + np.cos(xArg_neg)*np.sin(yArg_neg)))
-                            # dev_vec = roughness[0] * np.random.randn(1)
-                            # xCur = xCur + dev_vec[0]
-                            # yCur = yCur + dev_vec[1]
-                            if i == len(rValsOuter)-1:
-                                zCur = 0
-                            else:
-                                zCur = max(zCur + zDev, 0) # z cannot be less than zero
-                        
+                        scaleCur = np.sqrt(zScale1*scaleVec[j]**2 + zScale2*scaleVecSmooth[j]**2)
+                        # scaleCur = zScale1*scaleVec[j] + zScale2*scaleVecSmooth[j]
+                        xCur = scaleCur*rValsOuter[i]*np.cos(thetaVec[j])
+                        yCur = scaleCur*rValsOuter[i]*np.sin(thetaVec[j])
+                        zCur = zValsOuter[i]
                         cur_tag = gmsh.model.occ.add_point(xCur, yCur, zCur)
                         outer_tag_list.append(cur_tag)
                         all_points_list.append(cur_tag)
@@ -249,31 +243,6 @@ def create_3dcell(
         )
         cell_plane_tag = gmsh.model.occ.add_plane_surface([outer_loop_tag])
         outer_shape = gmsh.model.occ.revolve([(2, cell_plane_tag)], 0, 0, 0, 0, 0, 1, 2 * np.pi)
-    
-    if nanopillars != "":
-        nanopillar_rad = nanopillars[0]
-        nanopillar_height = nanopillars[1]
-        nanopillar_spacing = nanopillars[2]
-        zero_idx = np.nonzero(zValsOuter <= 0.0)
-        num_pillars = 2*np.floor(rValsOuter[zero_idx]/nanopillar_spacing) + 1
-        rMax = nanopillar_spacing * np.floor(rValsOuter[zero_idx]/nanopillar_spacing)
-        test_coords = np.linspace(-rMax[0], rMax[0], int(num_pillars[0]))
-        xTest, yTest = np.meshgrid(test_coords, test_coords)
-        rTest = np.sqrt(xTest**2 + yTest**2)
-        keep_logic = rTest <= rValsOuter[zero_idx]-nanopillar_rad-0.1
-        xTest, yTest = xTest[keep_logic], yTest[keep_logic]
-        for i in range(len(xTest)):
-            cyl_tag = gmsh.model.occ.add_cylinder(
-                xTest[i], yTest[i], 0.0, 0, 0, nanopillar_height-nanopillar_rad, nanopillar_rad)
-            cap_tag = gmsh.model.occ.add_sphere(
-                xTest[i], yTest[i], nanopillar_height-nanopillar_rad, nanopillar_rad)
-            cur_pillar = gmsh.model.occ.fuse([(3,cyl_tag)], [(3,cap_tag)])
-            (outer_shape, outer_shape_map) = gmsh.model.occ.cut(outer_shape, cur_pillar[0])
-            outer_shape_list = []
-            for j in range(len(outer_shape_map)):
-                if outer_shape_map[j]!=[]:
-                    outer_shape_list.append(outer_shape_map[j][0])
-            outer_shape = outer_shape_list
 
     outer_shape_tags = []
     for i in range(len(outer_shape)):
