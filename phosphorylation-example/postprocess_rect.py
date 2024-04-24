@@ -439,12 +439,15 @@ def plot_time_step_vs_error(
     time_steps = sorted({r.dt for r in all_results if r.ntasks == 1})
     x = np.arange(len(time_steps))
     width = 0.9 / len(refinements)
+
     rates = []
 
-    fig, ax = plt.subplots(1, len(diffusions), sharex=True, figsize=(10, 10))
+    fig, ax = plt.subplots(len(diffusions), 1, sharex=True, figsize=(10, 10))
     fig_t, ax_t = plt.subplots(
         len(radii), len(diffusions), sharex=True, figsize=(10, 10)
     )
+    lines = []
+    labels = []
     for j, diffusion in enumerate(diffusions):
         for axi in [ax, ax_t]:
             axi[j].set_title(f"D = {diffusion}")
@@ -487,36 +490,52 @@ def plot_time_step_vs_error(
                 )
 
             
-            ax[j].loglog(
+            l, = ax[j].loglog(
                 dts,
                 l2,
                 marker="o",
-                label=f"hmin {results[0].hmin:.3f}, hmax: {results[0].hmax:.3f}",
+                label=f"h {results[0].hmin:.3f}",
             )
+            if j == 0:
+                lines.append(l)
+                labels.append(f"{results[0].hmin:.3f}")
             ax_t[j].bar(
                 x[np.isin(time_steps, dts)] + k * width,
                 timings,
                 width,
                 label=f"refinement {refinement}",
             )
-            if refinement == 0:
+            # if refinement == 0:
                 # Use the point of the highest timestep to draw a line 
                 # with the expected convergefnce rate
                 # breakpoint()
-                ax[j].loglog(dts, (dts ** 2) / dts[-3] * results[0].l2, "k--")
-
-        ax[j].legend()
+                
+        # ax[j].legend()
         # ax_t[j].legend()
-        ax[j].set_xlabel("Time step [s]")
         ax_t[j].set_xlabel("Time step [s]")
         ax_t[j].set_ylabel("Total run time [s]")
         ax_t[j].set_xticks(x + width * len(refinements) / 2)
         ax_t[j].set_xticklabels([f"{t:.1e}" for t in time_steps], rotation=45)
         ax_t[j].set_yscale("log")
 
-    ax[0].set_ylabel(r"$ \| u_e - u \|_2$")
+        ax[j].set_ylabel(r"$ \| u_e - u \|_2$")
+
+    l, = ax[0].loglog(dts[4:], ((dts[4:] ** 2.1) / dts[-1]) * 0.15, "k--")
+    lines.append(l)
+    labels.append("$O((\Delta t)^{2.1})$")
+    l,  = ax[1].loglog(dts[3:], ((dts[3:] ** 2.6) / dts[-1]) * 0.2, "k:")
+    lines.append(l)
+    labels.append("$O((\Delta t)^{2.6})$")
+    ax[2].loglog(dts[2:], ((dts[2:] ** 2.6) / dts[-1]) * 0.2, "k:")
+
+    ax[-1].set_xlabel("Time step [s]")
+    lgd = fig.legend(lines, labels, loc="center right", title="$h$")
+    fig.subplots_adjust(right=0.85)
+
     fig.savefig(
-        output_folder / f"timestep_vs_error.{format}",
+        output_folder / f"time_step_vs_error.{format}",
+        bbox_extra_artists=(lgd,),
+        bbox_inches="tight",
         dpi=300,
     )
     fig_t.savefig(
@@ -536,15 +555,22 @@ def plot_refinement_vs_error(
     width = 0.9 / len(time_steps)
     rates = []
 
-    fig, ax = plt.subplots(1, len(diffusions), sharex=True, figsize=(10, 10))
-    fig_t, ax_t = plt.subplots(
-        len(radii), len(diffusions), sharex=True, figsize=(10, 10)
-    )
+    fig, ax = plt.subplots(len(diffusions),1, sharex=True, figsize=(10, 10))
+    # fig_t, ax_t = plt.subplots(
+    #     len(radii), len(diffusions), sharex=True, figsize=(10, 10)
+    # )
+    lines = []
+    labels = []
     for j, diffusion in enumerate(diffusions):
-        for axi in [ax, ax_t]:
+        # if j > 0:
+        #     continue
+        print(f"D = {diffusion}")
+        for axi in [ax]:
             axi[j].set_title(f"D = {diffusion}")
 
         for k, dt in enumerate(time_steps):
+            print(f"dt = {dt}")
+            print()
             results = list(
                 sorted(
                     filter(
@@ -560,19 +586,17 @@ def plot_refinement_vs_error(
             )
 
             
-            # breakpoint()
             if len(results) == 0:
                 continue
     
-            # dts = np.array([d.dt for d in results])
-            # hmins = np.array([d.hmin for d in results])
-            # hmaxs = np.array([d.hmax for d in results])
-            refs = np.array([2 ** (-(d.refinement + 1)) for d in results])
+            hmaxs = np.array([d.hmax for d in results])
 
             l2 = np.array([d.l2 for d in results])
             timings = np.array([d.max_run_time for d in results])
 
             for r in results:
+                print(len(r.t))
+                print("Refinement: ", r.refinement, "(hmin: ", r.hmin, ", hmax: ", r.hmax, ")", "l2: ", r.l2)
                 rates.append(
                     {
                         "radius": 2.0,
@@ -585,17 +609,21 @@ def plot_refinement_vs_error(
                     }
                 )
 
-            if np.isclose(dt, np.min(time_steps)):
+            
+            # if np.isclose(dt, np.min(time_steps)):
  
-                ax[j].loglog(refs, (results[-1].l2/refs[-1])*refs, "k:", label="O(h)")
-                ax[j].loglog(refs,  (results[-1].l2/refs[-1])*refs **2, "k--", label="O(h^2)")
+                # ax[j].loglog(refs, (results[-1].l2/refs[-1])*refs, "k:", label="O(h)")
+                # ax[j].loglog(refs,  (results[-1].l2/refs[-1])*refs **2, "k--", label="O(h^2)")
       
-            ax[j].loglog(
-                refs,
+            l, = ax[j].loglog(
+                hmaxs,
                 l2,
                 marker="o",
-                label=f"dt={dt:.1e}",
+                # label=f"dt={dt:.1e}",
             )
+            if j == 0:
+                lines.append(l)
+                labels.append(f"{dt:.1e}")
             # ax_t[j].bar(
             #     x + k * width,
             #     timings,
@@ -604,24 +632,37 @@ def plot_refinement_vs_error(
             # )
            
 
-        ax[j].legend()
+        # ax[j].legend()
         # ax_t[j].legend()
-        ax[j].set_xlabel("$2^{-(refinement + 1)}$")
-        ax_t[j].set_xlabel("Time step [s]")
-        ax_t[j].set_ylabel("Total run time [s]")
+        # ax[j].set_xlabel("$h$")
+        # ax_t[j].set_xlabel("Time step [s]")
+        # ax_t[j].set_ylabel("Total run time [s]")
         # ax_t[j].set_xticks(x + width * len(time_steps) / 2)
         # ax_t[j].set_xticklabels([f"{t:.1e}" for t in time_steps], rotation=45)
         # ax_t[j].set_yscale("log")
 
-    ax[0].set_ylabel(r"$ \| u_e - u \|_2$")
+        ax[j].set_ylabel(r"$ \| u_e - u \|_2$")
+    ax[-1].set_xlabel("$h$")
+
+    l, = ax[0].loglog(hmaxs, ((hmaxs ** 2.0) / hmaxs[-1]) * 0.015, "k--")
+    lines.append(l)
+    labels.append("$O((h)^{2.0})$")
+    ax[1].loglog(hmaxs, ((hmaxs ** 2.0) / hmaxs[-1]) * 0.0015, "k--")
+    ax[2].loglog(hmaxs, ((hmaxs ** 2.0) / hmaxs[-1]) * 0.00015, "k--")
+
+    lgd = fig.legend(lines, labels, loc="center right", title="Time step [s]")
+    fig.subplots_adjust(right=0.85)
+
     fig.savefig(
         output_folder / f"refinement_vs_error.{format}",
+        bbox_extra_artists=(lgd,),
+        bbox_inches="tight",
         dpi=300,
     )
-    fig_t.savefig(
-        output_folder / f"total_refinement_error.{format}",
-        dpi=300,
-    )
+    # fig_t.savefig(
+    #     output_folder / f"total_refinement_error.{format}",
+    #     dpi=300,
+    # )
 
 
 def plot_avg_aphos_vs_analytic(all_results, output_folder, format, axisymmetric=False):
@@ -688,99 +729,94 @@ def get_convergence_rates(all_results, output_folder, axisymmetric=False):
 
     rates = []
 
-    for i, radius in enumerate(radii):
 
-        for j, diffusion in enumerate(diffusions):
+    for j, diffusion in enumerate(diffusions):
 
-            for k, refinement in enumerate(refinements):
-                results = list(
-                    sorted(
-                        filter(
-                            lambda d: np.isclose(d.radius, radius)
-                            and d.refinement == refinement
-                            and np.isclose(d.diffusion, diffusion)
-                            and d.ntasks == 1
-                            and (d.axisymmetric is axisymmetric),
-                            all_results,
-                        ),
-                        key=lambda d: d.dt,
-                    )
+        for k, refinement in enumerate(refinements):
+            results = list(
+                sorted(
+                    filter(
+                        lambda d: np.isclose(d.radius, 2.0)
+                        and d.refinement == refinement
+                        and np.isclose(d.diffusion, diffusion)
+                        and d.ntasks == 1
+                        and (d.axisymmetric is axisymmetric),
+                        all_results,
+                    ),
+                    key=lambda d: d.dt,
                 )
+            )
 
-                for r in results:
-                    rates.append(
-                        {
-                            "radius": radius,
-                            "diffusion": diffusion,
-                            "refinement": refinement,
-                            "hmin": r.hmin,
-                            "hmax": r.hmax,
-                            "dt": r.dt,
-                            "l2": float(r.l2),
-                        }
-                    )
+            for r in results:
+                rates.append(
+                    {
+                        "diffusion": diffusion,
+                        "refinement": refinement,
+                        "hmin": r.hmin,
+                        "hmax": r.hmax,
+                        "dt": r.dt,
+                        "l2": float(r.l2),
+                    }
+                )
 
     rates_df = pd.DataFrame(rates)
     rates_spatial = []
     rates_temporal = []
 
-    for radius in radii:
-        rates_radius = rates_df[rates_df["radius"] == radius]
-        for diffusion in diffusions:
-            rates_diffusion = rates_radius[rates_radius["diffusion"] == diffusion]
 
-            # Spatial convergence rates
-            for dt in time_steps:
-                rates_dt = rates_diffusion[rates_diffusion["dt"] == dt].sort_values(
-                    by="hmin", ascending=False
+    for diffusion in diffusions:
+        rates_diffusion = rates_df[rates_df["diffusion"] == diffusion]
+
+        # Spatial convergence rates
+        for dt in time_steps:
+            rates_dt = rates_diffusion[rates_diffusion["dt"] == dt].sort_values(
+                by="hmin", ascending=False
+            )
+            h = rates_dt.hmin[1:].values
+            h_ = rates_dt.hmin[:-1].values
+
+            e = rates_dt.l2[1:].values
+            e_ = rates_dt.l2[:-1].values
+
+            r = np.log(e / e_) / np.log(h / h_)
+            for i in range(1, len(r)):
+                rates_spatial.append(
+                    {
+                        "diffusion": diffusion,
+                        "hmin_i": h[i],
+                        "hmin_i-1": h_[i],
+                        "l2_i": e[i],
+                        "l2_i-1": e_[i],
+                        "dt": dt,
+                        "rate": r[i],
+                    }
                 )
-                h = rates_dt.hmin[1:].values
-                h_ = rates_dt.hmin[:-1].values
 
-                e = rates_dt.l2[1:].values
-                e_ = rates_dt.l2[:-1].values
+        # Temporal convergence rates
+        for refinement in refinements:
+            rates_ref = rates_diffusion[
+                rates_diffusion["refinement"] == refinement
+            ].sort_values(by="dt", ascending=False)
+            dt = rates_ref.dt.values[1:]
+            dt_ = rates_ref.dt.values[:-1]
 
-                r = np.log(e / e_) / np.log(h / h_)
-                for i in range(1, len(r)):
-                    rates_spatial.append(
-                        {
-                            "radius": radius,
-                            "diffusion": diffusion,
-                            "hmin_i": h[i],
-                            "hmin_i-1": h_[i],
-                            "l2_i": e[i],
-                            "l2_i-1": e_[i],
-                            "dt": dt,
-                            "rate": r[i],
-                        }
-                    )
+            e = rates_ref.l2.values[1:]
+            e_ = rates_ref.l2.values[:-1]
 
-            # Temporal convergence rates
-            for refinement in refinements:
-                rates_ref = rates_diffusion[
-                    rates_diffusion["refinement"] == refinement
-                ].sort_values(by="dt", ascending=False)
-                dt = rates_ref.dt.values[1:]
-                dt_ = rates_ref.dt.values[:-1]
-
-                e = rates_ref.l2.values[1:]
-                e_ = rates_ref.l2.values[:-1]
-
-                r = np.log(e / e_) / np.log(dt / dt_)
-                for i in range(1, len(r)):
-                    rates_temporal.append(
-                        {
-                            "radius": radius,
-                            "diffusion": diffusion,
-                            "dt_i": dt[i],
-                            "dt_i-1": dt_[i],
-                            "l2_i": e[i],
-                            "l2_i-1": e_[i],
-                            "refinement": refinement,
-                            "hmin": rates_ref.hmin.values[i],
-                            "rate": r[i],
-                        }
-                    )
+            r = np.log(e / e_) / np.log(dt / dt_)
+            for i in range(1, len(r)):
+                rates_temporal.append(
+                    {
+                        "diffusion": diffusion,
+                        "dt_i": dt[i],
+                        "dt_i-1": dt_[i],
+                        "l2_i": e[i],
+                        "l2_i-1": e_[i],
+                        "refinement": refinement,
+                        "hmin": rates_ref.hmin.values[i],
+                        "rate": r[i],
+                    }
+                )
 
     rates_spatial_df = pd.DataFrame(rates_spatial)
     rates_temporal_df = pd.DataFrame(rates_temporal)
@@ -853,6 +889,70 @@ def plot_scalability(all_results, output_folder, format):
 
 
 
+
+def plot_convergence_finest(all_results, output_folder, format):
+    diffusions = sorted({r.diffusion for r in all_results if r.ntasks == 1})
+    refinements = sorted({r.refinement for r in all_results if r.ntasks == 1})
+    hmins = sorted({r.hmin for r in all_results if r.ntasks == 1})
+    time_steps = sorted({r.dt for r in all_results if r.ntasks == 1})
+
+    dt_min = time_steps[0]
+    hmin_min = hmins[0]
+
+    # dt
+    fig, ax = plt.subplots()
+    for diffusion in diffusions:
+        results = list(
+            sorted(
+                filter(
+                    lambda d: np.isclose(d.diffusion, diffusion)
+                    and d.ntasks == 1
+                    and np.isclose(d.hmin, hmin_min),
+                    all_results,
+                ),
+                key=lambda d: d.dt
+            )
+        )
+  
+        l2 = np.array([d.l2 for d in results])
+        ax.loglog(time_steps, l2, marker="o", label=f"D = {diffusion}")
+
+    ax.set_title(f"hmin = {hmin_min}")
+    ax.set_xlabel("Time step [s]")
+    ax.set_ylabel(r"$ \| u_e - u \|_2$")
+    ax.legend(title="Diffusion")
+    fig.savefig(
+        output_folder / f"convergence_finest_dt.{format}",
+        dpi=300,
+    )
+
+    # hmin
+    fig, ax = plt.subplots()
+    for diffusion in diffusions:
+        results = list(
+            sorted(
+                filter(
+                    lambda d: np.isclose(d.diffusion, diffusion)
+                    and d.ntasks == 1
+                    and np.isclose(d.dt, dt_min),
+                    all_results,
+                ),
+                key=lambda d: d.hmin
+            )
+        )
+  
+        l2 = np.array([d.l2 for d in results])
+        ax.loglog(hmins, l2, marker="o", label=f"D = {diffusion}")
+
+    ax.set_title(f"dt = {dt_min}")
+    ax.set_xlabel("h")
+    ax.set_ylabel(r"$ \| u_e - u \|_2$")
+    ax.legend(title="Diffusion")
+    fig.savefig(
+        output_folder / f"convergence_finest_hmin.{format}",
+        dpi=300,
+    )
+
 def main(
     results_folder: Path,
     output_folder: Path,
@@ -881,9 +981,14 @@ def main(
     # plot_error_different_timesteps(all_results, output_folder, format)
         
 
+    # Only include results with diffusion greater than 1
+    all_results = [r for r in all_results if r.diffusion > 1]
+
+
+    plot_convergence_finest(all_results, output_folder, format)
     # get_convergence_rates(all_results, output_folder)
     # plot_time_step_vs_error(all_results, output_folder, format)
-    plot_refinement_vs_error(all_results, output_folder, format)
+    # plot_refinement_vs_error(all_results, output_folder, format)
     # plot_avg_aphos_vs_analytic(all_results, output_folder, format)
 
     # plot_scalability(all_results, output_folder, format)
