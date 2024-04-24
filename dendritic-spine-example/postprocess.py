@@ -316,9 +316,7 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
     # Load solutions
     u_coarsest = dolfin.Function(V_coarsest)
     u_finest = dolfin.Function(V_finest)
-    u_finest_on_coarsest = dolfin.Function(V_coarsest)
-    error = dolfin.Function(V_coarsest)
-
+    u_err = dolfin.Function(V_coarsest)
     i = 0
     errs = np.zeros(V_coarsest.dim())
     max_errs = []
