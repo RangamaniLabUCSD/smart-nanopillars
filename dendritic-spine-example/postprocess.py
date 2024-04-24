@@ -317,22 +317,30 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
     u_coarsest = dolfin.Function(V_coarsest)
     u_finest = dolfin.Function(V_finest)
     u_err = dolfin.Function(V_coarsest)
+    dm = dolfin.dof_to_vertex_map(V_coarsest)
     i = 0
     errs = np.zeros(V_coarsest.dim())
+
+    u_err_fname = output_folder / "u_err.xdmf"
+    u_err_fname.unlink(missing_ok=True)
+    u_err_fname.with_suffix(".h5").unlink(missing_ok=True)
+
     max_errs = []
     l2_errs = []
     l1_errs = []
-    while True:
-        try:
-            with dolfin.XDMFFile((coarsest_data.folder / "Ca.xdmf").as_posix()) as f:
-                f.read_checkpoint(u_coarsest, "Ca", i)
-            with dolfin.XDMFFile((finest_data.folder / "Ca.xdmf").as_posix()) as f:
-                f.read_checkpoint(u_finest, "Ca", i)
-        except RuntimeError:
-            break
+    for i, t in enumerate(coarsest_data.t):
+        with dolfin.XDMFFile((coarsest_data.folder / "Ca.xdmf").as_posix()) as f:
+            f.read_checkpoint(u_coarsest, "Ca", i)
+        with dolfin.XDMFFile((finest_data.folder / "Ca.xdmf").as_posix()) as f:
+            f.read_checkpoint(u_finest, "Ca", i)
 
         for j, point in enumerate(V_coarsest.mesh().coordinates()):
             errs[j] = u_coarsest(point) - u_finest(point)
+
+        u_err.vector()[:] = errs[dm]
+        with dolfin.XDMFFile(u_err_fname.as_posix()) as f:
+            f.write_checkpoint(u_err, "u_err", t, dolfin.XDMFFile.Encoding.HDF5, True)
+
         i += 1
         max_errs.append(np.linalg.norm(errs, ord=np.inf))
         l2_errs.append(np.linalg.norm(errs))
