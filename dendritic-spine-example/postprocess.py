@@ -14,6 +14,7 @@ import dendritic_spine_args
 
 ntasks_pattern = re.compile("ntasks: (?P<n>\d+)")
 
+
 class Data(NamedTuple):
     timings_: list[dict[str, Any]]
     config: dict[str, Any]
@@ -28,30 +29,30 @@ class Data(NamedTuple):
     @property
     def mesh(self) -> str:
         return Path(self.config["mesh_file"]).stem
-    
-    
+
     @property
     def dt(self) -> float:
         return self.config["solver"]["initial_dt"]
-    
+
     @property
     def timings(self):
         return pd.DataFrame(self.timings_)
-    
+
     @property
     def num_refinements(self) -> int:
         if "refined" in self.mesh:
             return int(self.mesh.split("_")[-1])
         return 0
-    
+
     @property
     def total_run_time(self) -> float:
-
         try:
-            return self.timings[self.timings["name"] == "dendritic-spine-example"]["wall tot"].values[0]
+            return self.timings[self.timings["name"] == "dendritic-spine-example"][
+                "wall tot"
+            ].values[0]
         except IndexError:
             return np.nan
-    
+
     def to_json(self) -> dict[str, Any]:
         return {
             "t": self.t.tolist(),
@@ -87,10 +88,10 @@ def parse_timings(timings: str) -> dict[str, Any]:
     data.append(dict(zip(header, item)))
     return data
 
+
 def load_all_data(main_path: Path):
     all_data = []
     for folder in (f for f in Path(main_path).iterdir() if f.is_dir()):
-        
         try:
             data = load_data(folder=folder)
             print(data.mesh)
@@ -98,21 +99,25 @@ def load_all_data(main_path: Path):
         except FileNotFoundError as e:
             print(f"Skipping folder {folder}, due to {e}")
             continue
-       
+
         all_data.append(data)
     return all_data
 
 
 def plot_data(all_data: list[Data], output_folder, format: str = "png"):
-
     data = [d for d in all_data if d.ntasks == 1]
     fig, ax = plt.subplots(2, 4, sharex=True, sharey="row", figsize=(15, 8))
-      
-    mesh2index = {"1spine_mesh_coarser": 0, "1spine_mesh_coarser_refined_1": 1, "1spine_mesh_coarser_refined_2": 2,  "1spine_mesh": 3}
-    
+
+    mesh2index = {
+        "1spine_mesh_coarser": 0,
+        "1spine_mesh_coarser_refined_1": 1,
+        "1spine_mesh_coarser_refined_2": 2,
+        "1spine_mesh": 3,
+    }
+
     dts = list(sorted({d.dt for d in data}))
     dts2color = {d: c for d, c in zip(dts, cycle(plt.cm.tab10.colors))}
-    
+
     timings = [np.zeros_like(dts) for _ in mesh2index]
     lines = []
     labels = []
@@ -120,7 +125,7 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
         index = mesh2index[d.mesh]
         timings[index][dts.index(d.dt)] = d.total_run_time
 
-        l, = ax[0, index].plot(d.t, d.concVec, label=d.dt, color=dts2color[d.dt])
+        (l,) = ax[0, index].plot(d.t, d.concVec, label=d.dt, color=dts2color[d.dt])
         if index == 0:
             lines.append(l)
             labels.append(f"{d.dt:.2e}")
@@ -128,35 +133,53 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
         # breakpoint()
         print(d.mesh, d.dt, d.num_refinements, d.folder.stem)
 
-
     for k, v in mesh2index.items():
         ax[0, v].set_title(" ".join(k.split("_")))
-    
+
     ax[0, 0].set_ylabel("Average Cytosolic calcium (μM)")
     ax[1, 0].set_ylabel("Average Gradient of Cytosolic calcium (μM)")
 
-    lgd = fig.legend(lines, labels, title="Time step", loc="center right", bbox_to_anchor=(1.1, 0.5))
+    lgd = fig.legend(
+        lines, labels, title="Time step", loc="center right", bbox_to_anchor=(1.1, 0.5)
+    )
     fig.subplots_adjust(right=0.99)
-    fig.savefig((output_folder / "results.png").with_suffix(f".{format}"), bbox_extra_artists=(lgd,), bbox_inches="tight")
-
+    fig.savefig(
+        (output_folder / "results.png").with_suffix(f".{format}"),
+        bbox_extra_artists=(lgd,),
+        bbox_inches="tight",
+    )
 
     # Plot timings
     fig_t, ax_t = plt.subplots()
 
     x = np.arange(0, len(dts))
-    ax_t.bar(x-0.25, timings[0], width=0.25, label=" ".join(list(mesh2index.keys())[0].split("_")))
-    ax_t.bar(x, timings[1], width=0.25, label=" ".join(list(mesh2index.keys())[1].split("_")))
-    ax_t.bar(x+0.25, timings[2], width=0.25, label=" ".join(list(mesh2index.keys())[2].split("_")))
+    ax_t.bar(
+        x - 0.25,
+        timings[0],
+        width=0.25,
+        label=" ".join(list(mesh2index.keys())[0].split("_")),
+    )
+    ax_t.bar(
+        x, timings[1], width=0.25, label=" ".join(list(mesh2index.keys())[1].split("_"))
+    )
+    ax_t.bar(
+        x + 0.25,
+        timings[2],
+        width=0.25,
+        label=" ".join(list(mesh2index.keys())[2].split("_")),
+    )
     ax_t.set_yscale("log")
     ax_t.set_xticks(x)
     ax_t.set_xticklabels(dts)
     ax_t.legend()
     ax_t.grid()
     fig_t.savefig((output_folder / "timings.png").with_suffix(f".{format}"))
-   
+
 
 def plot_refinement_study(all_data: list[Data], output_folder, format: str = "png"):
-    data = sorted([d for d in all_data if "coarser" in d.mesh], key=lambda x: x.num_refinements)
+    data = sorted(
+        [d for d in all_data if "coarser" in d.mesh], key=lambda x: x.num_refinements
+    )
     dts = list(sorted({d.dt for d in data}))
     num_refinements = list(sorted({d.num_refinements for d in data}))
     # Find index where we have all refinements
@@ -173,7 +196,7 @@ def plot_refinement_study(all_data: list[Data], output_folder, format: str = "pn
         if key in plotted:
             continue
         plotted.add(key)
-        l, = ax[0, index].plot(d.t, d.concVec, label=d.num_refinements)
+        (l,) = ax[0, index].plot(d.t, d.concVec, label=d.num_refinements)
         ax[1, index].plot(d.t, d.gradVec, label=d.num_refinements)
         ax[0, index].set_title(f"dt = {d.dt}")
         if index == 3:
@@ -181,10 +204,21 @@ def plot_refinement_study(all_data: list[Data], output_folder, format: str = "pn
             labels.append(d.num_refinements)
     ax[0, 0].set_ylabel("Average Cytosolic calcium (μM)")
     ax[1, 0].set_ylabel("Average Gradient of Cytosolic calcium (μM)")
-    lgd = fig.legend(lines, labels, title="Number of refinements", loc="center right", bbox_to_anchor=(1.1, 0.5))
+    lgd = fig.legend(
+        lines,
+        labels,
+        title="Number of refinements",
+        loc="center right",
+        bbox_to_anchor=(1.1, 0.5),
+    )
     fig.subplots_adjust(right=0.9)
-    fig.savefig((output_folder / "refinement_study.png").with_suffix(f".{format}"), bbox_extra_artists=(lgd,), bbox_inches="tight")
-        
+    fig.savefig(
+        (output_folder / "refinement_study.png").with_suffix(f".{format}"),
+        bbox_extra_artists=(lgd,),
+        bbox_inches="tight",
+    )
+
+
 def load_timings(folder: Path) -> list[dict[str, Any]]:
     timings = (folder / "timings.txt").read_text()
 
@@ -198,9 +232,9 @@ def load_timings(folder: Path) -> list[dict[str, Any]]:
 
     header = list(map(str.strip, filter(f, timings.splitlines()[0].split("  "))))
     header[0] = "name"
-    
+
     data = []
-    for item_str in timings.splitlines()[2:]:  
+    for item_str in timings.splitlines()[2:]:
         item = list(map(str.strip, filter(f, item_str.split("  "))))
         data.append(dict(zip(header, item)))
 
@@ -209,13 +243,11 @@ def load_timings(folder: Path) -> list[dict[str, Any]]:
     return data
 
 
-
 def load_data(folder: Path = Path("82094")) -> Data:
-
     config_file = folder / "config.json"
     if not config_file.is_file():
         raise FileNotFoundError(config_file)
-    
+
     t_file = folder / "tvec.txt"
     if not t_file.is_file():
         raise FileNotFoundError(t_file)
@@ -226,22 +258,88 @@ def load_data(folder: Path = Path("82094")) -> Data:
 
     config = json.loads(config_file.read_text())
     timings = load_timings(folder=folder)
-    stdout = (
-        folder / f"{folder.name}-dendritic_spine-stdout.txt"
-    ).read_text()
-    stderr = (
-        folder / f"{folder.name}-dendritic_spine-stderr.txt"
-    ).read_text()
-    ntasks = parse_ntasks(stdout=stdout)
+    try:
+        stdout = (folder / f"{folder.name}-dendritic_spine-stdout.txt").read_text()
+        stderr = (folder / f"{folder.name}-dendritic_spine-stderr.txt").read_text()
+        ntasks = parse_ntasks(stdout=stdout)
+    except FileNotFoundError:
+        stdout = ""
+        stderr = ""
+        ntasks = 1
 
-    return Data(timings_=timings, config=config, t=t, concVec=concVec, gradVec=gradVec, stderr=stderr, stdout=stdout, ntasks=ntasks, folder=folder)
-    
-def main(results_folder: Path, output_folder: Path, 
-         format: str = "png",
-         skip_if_processed: bool = False,
-         use_tex: bool = False,
-    ) -> int:
-    
+    return Data(
+        timings_=timings,
+        config=config,
+        t=t,
+        concVec=concVec,
+        gradVec=gradVec,
+        stderr=stderr,
+        stdout=stdout,
+        ntasks=ntasks,
+        folder=folder,
+    )
+
+
+def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
+    data = sorted(all_data, key=lambda x: x.num_refinements)
+    here = Path(__file__).parent
+    import dolfin
+
+    from load_model import load_model
+
+    coarsest_data = data[0]
+    finest_data = data[1]
+
+    model_coarse = load_model(
+        mesh_file=str(
+            here
+            / ".."
+            / "scripts"
+            / "meshes-dendritic-spine"
+            / f"{coarsest_data.mesh}.h5"
+        ),
+    )
+
+    model_finest = load_model(
+        mesh_file=str(
+            here
+            / ".."
+            / "scripts"
+            / "meshes-dendritic-spine"
+            / f"{finest_data.mesh}.h5"
+        ),
+    )
+
+    V_coarsest = model_coarse.sc["Ca"].u["u"].function_space().collapse()
+    V_finest = model_finest.sc["Ca"].u["u"].function_space().collapse()
+
+    # Load solutions
+    u_coarsest = dolfin.Function(V_coarsest)
+    u_finest = dolfin.Function(V_finest)
+    u_finest_on_coarsest = dolfin.Function(V_coarsest)
+    error = dolfin.Function(V_coarsest)
+
+    i = 0
+    while True:
+        with dolfin.XDMFFile((coarsest_data.folder / "Ca.xdmf").as_posix()) as f:
+            f.read_checkpoint(u_coarsest, "Ca", i)
+        with dolfin.XDMFFile((finest_data.folder / "Ca.xdmf").as_posix()) as f:
+            f.read_checkpoint(u_finest, "Ca", i)
+
+        # FIXME: This is not working
+        u_finest_on_coarsest.interpolate(u_finest)
+        # Compute the L_inf error between the two solutions on the coarsest mesh
+        error.vector()[:] = u_coarsest.vector() - u_finest_on_coarsest.vector()
+        error_norm = dolfin.norm(error, "linf")
+
+
+def main(
+    results_folder: Path,
+    output_folder: Path,
+    format: str = "png",
+    skip_if_processed: bool = False,
+    use_tex: bool = False,
+) -> int:
     plt.rcParams["text.usetex"] = use_tex
 
     output_folder.mkdir(exist_ok=True, parents=True)
@@ -258,9 +356,11 @@ def main(results_folder: Path, output_folder: Path,
             json.dumps([r.to_json() for r in all_results], indent=4)
         )
 
-    plot_data(all_results, output_folder, format=format)
-    plot_refinement_study(all_results, output_folder, format=format)
+    plot_linf_error(all_results, output_folder, format=format)
+    # plot_data(all_results, output_folder, format=format)
+    # plot_refinement_study(all_results, output_folder, format=format)
     return 0
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
