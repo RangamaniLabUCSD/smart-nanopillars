@@ -6,18 +6,25 @@ import json
 from typing import NamedTuple, Any
 from itertools import cycle
 import numpy as np
+import re
 import matplotlib.pyplot as plt
 
 import dendritic_spine_args
 
 
+ntasks_pattern = re.compile("ntasks: (?P<n>\d+)")
+
 class Data(NamedTuple):
-    timings_: dict[str, Any]
+    timings_: list[dict[str, Any]]
     config: dict[str, Any]
     t: np.ndarray
     concVec: np.ndarray
     gradVec: np.ndarray
-    
+    stderr: str
+    stdout: str
+    ntasks: int
+    folder: Path
+
     @property
     def mesh(self) -> str:
         return Path(self.config["mesh_file"]).stem
@@ -52,9 +59,33 @@ class Data(NamedTuple):
             "gradVec": self.gradVec.tolist(),
             "config": self.config,
             "timings_": self.timings_,
+            "stderr": self.stderr,
+            "stdout": self.stdout,
+            "ntasks": self.ntasks,
         }
 
 
+def parse_ntasks(stdout: str) -> int:
+    for line in stdout.splitlines():
+        if m := re.match(ntasks_pattern, line):
+            return int(m.group("n"))
+
+    return 1
+
+
+def parse_timings(timings: str) -> dict[str, Any]:
+    f = lambda x: len(x) > 0 and "|" not in x
+
+    header = list(map(str.strip, filter(f, timings.splitlines()[0].split("  "))))
+    header[0] = "name"
+
+    data = []
+    for item_str in timings.splitlines()[2:]:
+        item = list(map(str.strip, filter(f, item_str.split("  "))))
+        data.append(dict(zip(header, item)))
+
+    data.append(dict(zip(header, item)))
+    return data
 
 def load_all_data(main_path: Path):
     all_data = []
@@ -74,21 +105,28 @@ def load_all_data(main_path: Path):
 
 def plot_data(all_data: list[Data], output_folder, format: str = "png"):
 
-    data = [d for d in all_data if d.num_refinements == 0]
-    fig, ax = plt.subplots(2, 3, sharex=True, sharey="row", figsize=(12, 8))
+    data = [d for d in all_data if d.ntasks == 1]
+    fig, ax = plt.subplots(2, 4, sharex=True, sharey="row", figsize=(15, 8))
       
-    mesh2index = {"1spine_mesh_coarser": 0, "1spine_mesh": 1, "2spine_mesh": 2}
-
+    mesh2index = {"1spine_mesh_coarser": 0, "1spine_mesh_coarser_refined_1": 1, "1spine_mesh_coarser_refined_2": 2,  "1spine_mesh": 3}
+    
     dts = list(sorted({d.dt for d in data}))
-    timings = (np.zeros_like(dts), np.zeros_like(dts), np.zeros_like(dts))
-    # Plot
+    dts2color = {d: c for d, c in zip(dts, cycle(plt.cm.tab10.colors))}
+    
+    timings = [np.zeros_like(dts) for _ in mesh2index]
+    lines = []
+    labels = []
     for d in sorted(data, key=lambda x: x.dt):
         index = mesh2index[d.mesh]
         timings[index][dts.index(d.dt)] = d.total_run_time
-        ax[0, index].plot(d.t, d.concVec, label=d.dt)
-        ax[1, index].plot(d.t, d.gradVec, label=d.dt)
+
+        l, = ax[0, index].plot(d.t, d.concVec, label=d.dt, color=dts2color[d.dt])
+        if index == 0:
+            lines.append(l)
+            labels.append(f"{d.dt:.2e}")
+        ax[1, index].plot(d.t, d.gradVec, label=d.dt, color=dts2color[d.dt])
         # breakpoint()
-        print(d.mesh, d.dt, d.total_run_time)
+        print(d.mesh, d.dt, d.num_refinements, d.folder.stem)
 
 
     for k, v in mesh2index.items():
@@ -97,10 +135,10 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
     ax[0, 0].set_ylabel("Average Cytosolic calcium (μM)")
     ax[1, 0].set_ylabel("Average Gradient of Cytosolic calcium (μM)")
 
-    for axi in ax.flatten():
-        axi.legend(title="Timestep")
+    lgd = fig.legend(lines, labels, title="Time step", loc="center right", bbox_to_anchor=(1.1, 0.5))
+    fig.subplots_adjust(right=0.99)
+    fig.savefig((output_folder / "results.png").with_suffix(f".{format}"), bbox_extra_artists=(lgd,), bbox_inches="tight")
 
-    fig.savefig((output_folder / "results.png").with_suffix(f".{format}"))
 
     # Plot timings
     fig_t, ax_t = plt.subplots()
@@ -115,11 +153,16 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
     ax_t.legend()
     ax_t.grid()
     fig_t.savefig((output_folder / "timings.png").with_suffix(f".{format}"))
-
+   
 
 def plot_refinement_study(all_data: list[Data], output_folder, format: str = "png"):
     data = sorted([d for d in all_data if "coarser" in d.mesh], key=lambda x: x.num_refinements)
     dts = list(sorted({d.dt for d in data}))
+    num_refinements = list(sorted({d.num_refinements for d in data}))
+    # Find index where we have all refinements
+    for d in data:
+        print(d.dt, d.num_refinements, d.folder.stem)
+
     plotted = set()
     fig, ax = plt.subplots(2, len(dts), sharex=True, sharey="row", figsize=(12, 8))
     lines = []
@@ -133,7 +176,7 @@ def plot_refinement_study(all_data: list[Data], output_folder, format: str = "pn
         l, = ax[0, index].plot(d.t, d.concVec, label=d.num_refinements)
         ax[1, index].plot(d.t, d.gradVec, label=d.num_refinements)
         ax[0, index].set_title(f"dt = {d.dt}")
-        if index == 0:
+        if index == 3:
             lines.append(l)
             labels.append(d.num_refinements)
     ax[0, 0].set_ylabel("Average Cytosolic calcium (μM)")
@@ -142,7 +185,7 @@ def plot_refinement_study(all_data: list[Data], output_folder, format: str = "pn
     fig.subplots_adjust(right=0.9)
     fig.savefig((output_folder / "refinement_study.png").with_suffix(f".{format}"), bbox_extra_artists=(lgd,), bbox_inches="tight")
         
-def load_timings(folder: Path) -> dict[str, Any]:
+def load_timings(folder: Path) -> list[dict[str, Any]]:
     timings = (folder / "timings.txt").read_text()
 
     # # Read total run time from the start and end timestamp from the logs
@@ -183,8 +226,15 @@ def load_data(folder: Path = Path("82094")) -> Data:
 
     config = json.loads(config_file.read_text())
     timings = load_timings(folder=folder)
+    stdout = (
+        folder / f"{folder.name}-dendritic_spine-stdout.txt"
+    ).read_text()
+    stderr = (
+        folder / f"{folder.name}-dendritic_spine-stderr.txt"
+    ).read_text()
+    ntasks = parse_ntasks(stdout=stdout)
 
-    return Data(timings_=timings, config=config, t=t, concVec=concVec, gradVec=gradVec)
+    return Data(timings_=timings, config=config, t=t, concVec=concVec, gradVec=gradVec, stderr=stderr, stdout=stdout, ntasks=ntasks, folder=folder)
     
 def main(results_folder: Path, output_folder: Path, 
          format: str = "png",
@@ -207,7 +257,6 @@ def main(results_folder: Path, output_folder: Path,
         results_file.write_text(
             json.dumps([r.to_json() for r in all_results], indent=4)
         )
-
 
     plot_data(all_results, output_folder, format=format)
     plot_refinement_study(all_results, output_folder, format=format)
