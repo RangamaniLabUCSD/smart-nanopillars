@@ -116,7 +116,7 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
     ax[1].set_ylabel("F-Actin")
     ax[1].set_xlabel("Time")
     lgd = fig.legend(lines, labels, title="Refinement", loc="center right", bbox_to_anchor=(1.1, 0.5))
-    fig.subplots_adjust(right=0.99)
+    fig.subplots_adjust(right=0.9)
     fig.savefig((output_folder / "results.png").with_suffix(f".{format}"), bbox_extra_artists=(lgd,), bbox_inches="tight")
     
     fig_t, ax_t = plt.subplots()    
