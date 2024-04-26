@@ -112,6 +112,7 @@ def main(
             hEdge=hEdge,
             hInnerEdge=hInnerEdge,
             thetaExpr=shape2theta(shape),
+            sym_fraction=sym_fraction,
         )
 
         cell_mesh, cell_markers, facet_markers, _ = refine(
@@ -123,15 +124,14 @@ def main(
             if topology == "boundary":
                 facet_markers.set_value(f.index(), 10)
 
-        # if applicable, define symmetries of current model
+        # if applicable, exclude no flux surfaces from boundary
         if sym_fraction < 1:
-            for c in d.cells(cell_mesh):
+            for f in d.facets(cell_mesh):
                 # calculate current angle theta
-                theta_cur = np.arctan2(c.midpoint().y(), c.midpoint().x())
-                if theta_cur > 2 * np.pi * sym_fraction or theta_cur < 0.0:
-                    cell_markers.set_value(c.index(), 0)
-                    for f in d.facets(c):
-                        facet_markers.set_value(f.index(), 0)
+                theta_cur = np.arctan2(f.midpoint().y(), f.midpoint().x())
+                if (np.abs(theta_cur-2*np.pi*sym_fraction) < hEdge/10 or 
+                    np.abs(theta_cur) < hEdge/10):
+                    facet_markers.set_value(f.index(), 0)
 
     mesh_folder = Path(mesh_folder)
     mesh_folder.mkdir(exist_ok=True, parents=True)

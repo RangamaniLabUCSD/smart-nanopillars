@@ -25,6 +25,7 @@ def create_3dcell(
     thetaExpr: str = "",
     use_tmp: bool = False,
     dcurv: float = 0.1,
+    sym_fraction: float = 1.0,
 ) -> Tuple[d.Mesh, d.MeshFunction, d.MeshFunction]:
     """
     Creates a 3d cell mesh.
@@ -78,6 +79,15 @@ def create_3dcell(
     if outerExpr == "":
         ValueError("Outer surface is not defined")
 
+    if sym_fraction == 0.0:
+        ValueError("Use create_2dcell for axisymmetric mesh")
+    elif not np.isclose(1.0/sym_fraction, round(1.0/sym_fraction)):
+        ValueError("sym_fraction must 1, 1/2, 1/3, 1/4, etc.")
+    elif sym_fraction != 1.0 and return_curvature:
+        print("Warning: Curvature calculations not supported for meshes"
+                      "with sym_fraction not 1.0, not returning curvature")
+        return_curvature = False
+
     rValsOuter, zValsOuter = implicit_curve(outerExpr)
     zMax = max(zValsOuter)
 
@@ -115,18 +125,20 @@ def create_3dcell(
             theta_crit = np.arctan2(b_rect, a_rect)
             theta_incr = 2*np.pi / (num_theta-1)
             num_per_eighth = int(np.floor((num_theta-1) / 8))
-            theta_range1 = np.linspace(0.0, theta_crit-theta_incr/4, num_per_eighth)
-            theta_range2 = np.linspace(theta_crit+theta_incr/4, 
-                                       np.pi-theta_crit-theta_incr/4, 2*num_per_eighth)
-            theta_range3 = np.linspace(np.pi-theta_crit+theta_incr/4, 
-                                       np.pi+theta_crit-theta_incr/4, 2*num_per_eighth)
-            theta_range4 = np.linspace(np.pi+theta_crit+theta_incr/4, 
-                                       2*np.pi-theta_crit-theta_incr/4, 2*num_per_eighth)
-            theta_range5 = np.linspace(2*np.pi-theta_crit+theta_incr/4, 
-                                       2*np.pi, num_per_eighth)
+            theta_range1 = np.linspace(0.0, theta_crit-theta_incr, num_per_eighth)
+            theta_range2 = np.linspace(theta_crit, 
+                                       np.pi-theta_crit-theta_incr, 2*num_per_eighth)
+            theta_range3 = np.linspace(np.pi-theta_crit, 
+                                       np.pi+theta_crit-theta_incr, 2*num_per_eighth)
+            theta_range4 = np.linspace(np.pi+theta_crit, 
+                                       2*np.pi-theta_crit-theta_incr, 2*num_per_eighth)
+            theta_range5 = np.linspace(2*np.pi-theta_crit, 
+                                       2*np.pi, num_per_eighth+1)
             thetaVec = np.concatenate([theta_range1, theta_range2, theta_range3, 
                                        theta_range4, theta_range5])
             thetaVec[-1] = 0.0 # for exactness, replace 2*pi with 0.0
+            if sym_fraction < 1:
+                thetaVec = thetaVec[thetaVec <= 2*np.pi*sym_fraction+1e-12]
             scaleVec = []
             for j in range(len(thetaVec)):
                 if np.abs(np.tan(thetaVec[j])) <= b_rect / a_rect:
@@ -159,7 +171,7 @@ def create_3dcell(
                             raise ValueError(f"Unable to smooth corners for {thetaExpr}")
 
         else:
-            thetaVec = np.linspace(0.0, 2*np.pi, num_theta)
+            thetaVec = np.linspace(0.0, 2*np.pi*sym_fraction, round(num_theta*sym_fraction))
             thetaVec[-1] = 0.0 # for exactness, replace 2*pi with 0.0
             thetaExprSym = parse_expr(thetaExpr)
             scaleVec = []
@@ -187,8 +199,6 @@ def create_3dcell(
     all_points_list = [top_point]
     if thetaExpr != "":
         # define theta dependence
-        rand_rough = np.random.rand(20,20)
-        rand_rough_neg = np.random.rand(20,20)
         for j in range(len(thetaVec)):
             if j == (len(thetaVec)-1):
                 outer_spline_list.append(outer_spline_list[0])
@@ -219,12 +229,27 @@ def create_3dcell(
                     [outer_spline_list[j], outer_spline_list[j-1], edge_tag])
                 edge_surf_list.append(gmsh.model.occ.add_bspline_filling(edge_loop_tag, type="Curved"))
                 edge_segments.append(edge_tag)
-        # now define total outer shape from edge_segments and edge_surf_list    
-        bottom_loop = gmsh.model.occ.add_curve_loop(edge_segments)
-        bottom_surf = gmsh.model.occ.add_plane_surface([bottom_loop])
-        cur_surf_loop = gmsh.model.occ.add_surface_loop([bottom_surf, *edge_surf_list])
-        outer_shape = gmsh.model.occ.add_volume([cur_surf_loop])
-        outer_shape = [(3, outer_shape)]
+        if sym_fraction < 1:
+            origin_tag = gmsh.model.occ.add_point(0, 0, 0)
+            bottom_line1 = gmsh.model.occ.add_line(origin_tag, bottom_point_list[0])
+            bottom_line2 = gmsh.model.occ.add_line(origin_tag, bottom_point_list[-1])
+            bottom_loop = gmsh.model.occ.add_curve_loop([bottom_line1, bottom_line2, *edge_segments])
+            bottom_surf = gmsh.model.occ.add_plane_surface([bottom_loop])
+            origin_line = gmsh.model.occ.add_line(origin_tag, top_point)
+            front_loop = gmsh.model.occ.add_curve_loop([origin_line, outer_spline_list[0], bottom_line1])
+            front_surf = gmsh.model.occ.add_bspline_filling(front_loop)
+            back_loop = gmsh.model.occ.add_curve_loop([origin_line, outer_spline_list[-1], bottom_line2])
+            back_surf = gmsh.model.occ.add_bspline_filling(back_loop)
+            cur_surf_loop = gmsh.model.occ.add_surface_loop([bottom_surf, front_surf, back_surf, *edge_surf_list])
+            outer_shape = gmsh.model.occ.add_volume([cur_surf_loop])
+            outer_shape = [(3, outer_shape)]
+        else:
+            # now define total outer shape from edge_segments and edge_surf_list    
+            bottom_loop = gmsh.model.occ.add_curve_loop(edge_segments)
+            bottom_surf = gmsh.model.occ.add_plane_surface([bottom_loop])
+            cur_surf_loop = gmsh.model.occ.add_surface_loop([bottom_surf, *edge_surf_list])
+            outer_shape = gmsh.model.occ.add_volume([cur_surf_loop])
+            outer_shape = [(3, outer_shape)]
     else:
         # rotate shape 2*pi in the case of no theta dependence
         outer_tag_list = []
@@ -242,7 +267,7 @@ def create_3dcell(
             [outer_spline, symm_axis_tag, bottom_tag]
         )
         cell_plane_tag = gmsh.model.occ.add_plane_surface([outer_loop_tag])
-        outer_shape = gmsh.model.occ.revolve([(2, cell_plane_tag)], 0, 0, 0, 0, 0, 1, 2 * np.pi)
+        outer_shape = gmsh.model.occ.revolve([(2, cell_plane_tag)], 0, 0, 0, 0, 0, 1, 2 * np.pi*sym_fraction)
 
     outer_shape_tags = []
     for i in range(len(outer_shape)):
@@ -250,7 +275,6 @@ def create_3dcell(
             outer_shape_tags.append(outer_shape[i][1])
     assert len(outer_shape_tags) == 1  # should be just one 3D body from the full revolution
 
-    # need to fix labeling of facets!
     if innerExpr == "":
         # No inner shape in this case
         gmsh.model.occ.synchronize()
@@ -274,7 +298,8 @@ def create_3dcell(
         symm_inner_tag = gmsh.model.occ.add_line(inner_tag_list[0], inner_tag_list[-1])
         inner_loop_tag = gmsh.model.occ.add_curve_loop([inner_spline_tag, symm_inner_tag])
         inner_plane_tag = gmsh.model.occ.add_plane_surface([inner_loop_tag])
-        inner_shape = gmsh.model.occ.revolve([(2, inner_plane_tag)], 0, 0, 0, 0, 0, 1, 2 * np.pi)
+        inner_shape = gmsh.model.occ.revolve([(2, inner_plane_tag)], 
+                                             0, 0, 0, 0, 0, 1, 2 * np.pi * sym_fraction)
         inner_shape_tags = []
         for i in range(len(inner_shape)):
             if inner_shape[i][0] == 3:  # pull out tags associated with 3d objects
