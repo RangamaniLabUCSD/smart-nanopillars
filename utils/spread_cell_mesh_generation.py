@@ -26,6 +26,7 @@ def create_3dcell(
     use_tmp: bool = False,
     roughness: Tuple[float, float] = [0, 0],
     sym_fraction: float = 1.0,
+    nuc_compression: float = 0.0,
 ) -> Tuple[d.Mesh, d.MeshFunction, d.MeshFunction]:
     """
     Creates a 3d cell mesh.
@@ -139,7 +140,7 @@ def create_3dcell(
     
     targetVol = 480/scaleFactor**3 *4 + nuc_vol + nanopillar_vol
     rValsOuter, zValsOuter = shape_adj_axisymm(refParam, zOffset, targetVol)
-    rValsOuter, zValsOuter = dilate_axisymm(rValsOuter, zValsOuter, targetVol)
+    rValsOuter, zValsOuter = dilate_axisymm(rValsOuter, zValsOuter, targetVol, 0.0)
     zMax = max(zValsOuter)
 
     rValsOuterClosed = np.concatenate((rValsOuter, -rValsOuter[::-1]))
@@ -147,10 +148,14 @@ def create_3dcell(
     curvFcnOuter = compute_curvature_1D(rValsOuterClosed, zValsOuterClosed, 
                                    curvRes=0.1, incl_parallel=True)
 
-    innerExpr = get_inner(zOffset, zMax, nucScaleFactor)
+    innerExpr = get_inner(zOffset, zMax, nucScaleFactor, nuc_compression)
     if not innerExpr == "":
         rValsInner, zValsInner = implicit_curve(innerExpr)
-        aInner, bInner, r0Inner, z0Inner = get_inner_param(zOffset, zMax, nucScaleFactor)
+        for i in range(len(rValsInner)):
+            if zValsInner[i] < zOffset + 0.05:
+                zValsInner[i] = zOffset + 0.05
+        rValsInner, zValsInner = dilate_axisymm(rValsInner, zValsInner, nuc_vol, zOffset+0.05)
+        aInner, bInner, r0Inner, z0Inner = get_inner_param(zOffset, zMax, nucScaleFactor, nuc_compression)
         # rValsInnerClosed = np.concatenate((rValsInner, -rValsInner[-2:1:-1]))
         # zValsInnerClosed = np.concatenate((zValsInner,  zValsInner[-2:1:-1]))
         # curvValsInner = compute_curvature_ellipse(rValsInnerClosed, zValsInnerClosed, 
@@ -681,40 +686,6 @@ def create_substrate(
         xTest = np.reshape(xTest, (len(xTest)**2))
         yTest = np.reshape(yTest, (len(yTest)**2))
         for i in range(len(xTest)):
-            # # add points and then rotate?
-            # np_tag_list = []
-            # np_line_list = []
-            # zCur = nanopillar_height + xSteric
-            # dtheta = np.pi/8
-            # thetaCurv1 = np.arange(np.pi/2, 0, -dtheta)
-            # xCurv1 = nanopillar_rad + xSteric*np.cos(thetaCurv1)
-            # zCurv1 = nanopillar_height + xSteric*(np.sin(thetaCurv1)-1)
-            # thetaCurv2 = np.arange(np.pi, 3*np.pi/2, dtheta)
-            # xCurv2 = nanopillar_rad + xSteric + xCurv*(1+np.cos(thetaCurv2))
-            # zCurv2 = xCurv*(1+np.sin(thetaCurv2))
-            # xCurVec = xTest[i] + np.concatenate((np.array([0]), xCurv1, 
-            #                                     np.array([nanopillar_rad+xSteric]), xCurv2, 
-            #                                     np.array([nanopillar_rad+xSteric+xCurv])))
-            # yCurVec = yTest[i] * np.ones([len(xCurVec),1])
-            # zCurVec = np.concatenate((np.array([nanopillar_height]), zCurv1, 
-            #                          np.array([nanopillar_height-xSteric]), zCurv2, 
-            #                          np.array([0])))
-            # for j in range(len(zCurVec)):
-            #     cur_tag = gmsh.model.occ.add_point(xCurVec[j], yCurVec[j], zCurVec[j])
-            #     if j > 0:
-            #         cur_line = gmsh.model.occ.add_line(cur_tag, np_tag_list[-1])
-            #         np_line_list.append(cur_line)
-            #     np_tag_list.append(cur_tag)
-
-            # # np_spline_tag = gmsh.model.occ.add_spline(np_tag_list)
-            # origin_np_tag = gmsh.model.occ.add_point(xTest[i], yTest[i], 0)
-            # bottom_np_tag = gmsh.model.occ.add_line(origin_np_tag, np_tag_list[-1])
-            # symm_np_tag = gmsh.model.occ.add_line(np_tag_list[0], origin_np_tag)
-            # np_loop_tag = gmsh.model.occ.add_curve_loop([*np_line_list, bottom_np_tag, symm_np_tag])
-            # np_plane_tag = gmsh.model.occ.add_plane_surface([np_loop_tag])
-            # np_shape = gmsh.model.occ.revolve([(2, np_plane_tag)], xTest[i], yTest[i], 0,
-            #                                   0, 0, 1, 2 * np.pi)
-
             np_shape = gmsh.model.occ.add_cylinder(xTest[i], yTest[i], 0.0, 0, 0, nanopillar_height, nanopillar_rad)
             # np_shape_tags = []
             # for j in range(len(np_shape)):
@@ -851,7 +822,7 @@ def create_2Dcell(
     rValsOuter, zValsOuter = dilate_axisymm(rValsOuter, zValsOuter, targetVol)
     zMax = max(zValsOuter)
 
-    innerExpr = get_inner(zOffset, zMax, nucScaleFactor)
+    innerExpr = get_inner(zOffset, zMax, nucScaleFactor, 0.0)
 
     if return_curvature:
         # create full mesh for curvature analysis and then map onto half mesh
@@ -1154,7 +1125,7 @@ def calc_vol_axisymm(rVec, zVec):
         vol += np.pi*(rVec[i]**2 * dz + rVec[i]*dr*dz + dr**2 * dz / 3)
     return vol
 
-def dilate_axisymm(rVec, zVec, volTarget):
+def dilate_axisymm(rVec, zVec, volTarget, zThresh):
     volCur = calc_vol_axisymm(rVec, zVec)
     normals = [[0, 1]]
     sTot = 0
@@ -1176,8 +1147,13 @@ def dilate_axisymm(rVec, zVec, volTarget):
     curSign = np.sign(volTarget-volCur)
     firstIt = True
     volPrev = volCur
+    adjIdx = np.nonzero(zVec <= zThresh + 1e-12)
+    if len(adjIdx[0]) == 0:
+        adjIdx = len(rVec)
+    else:
+        adjIdx = adjIdx[0][0]
     while np.abs(volCur-volTarget) > 0.001*volTarget:
-        for i in range(len(rVec)-1):
+        for i in range(adjIdx-1):
             curMove = normalMove*np.sign(volTarget-volCur)*(len(rVec)-i)/len(rVec)
             rVec[i] += curMove*normals[i][0]
             zVec[i] += curMove*normals[i][1]
@@ -1229,7 +1205,7 @@ def shape_adj_axisymm(paramVec, zOffset, volTarget):
         
     return (rVec, zVec)
 
-def get_inner(zOffset, zMax, scaleFactor):
+def get_inner(zOffset, zMax, scaleFactor, nuc_compression):
     # zMid = (zOffset + zMax) / 2
     zRad = 2.4/scaleFactor
     rRad = 5.3/scaleFactor
@@ -1239,10 +1215,13 @@ def get_inner(zOffset, zMax, scaleFactor):
         if zRad < 0:
             raise ValueError("Nucleus does not fit")
         # return ""
-    zMid = zOffset + zRad + 0.2
+    if nuc_compression == 0:
+        zMid = zOffset + zRad + 0.2
+    else:
+        zMid = zOffset + zRad + 0.05 - nuc_compression
     return f"(r/{rRad})**2 + ((z-{zMid})/{zRad})**2 - 1"
 
-def get_inner_param(zOffset, zMax, scaleFactor):
+def get_inner_param(zOffset, zMax, scaleFactor, nuc_compression):
     zRad = 2.4/scaleFactor
     rRad = 5.3/scaleFactor
     if (zMax - zOffset) <= (zRad*2 + 1.0):
@@ -1250,7 +1229,10 @@ def get_inner_param(zOffset, zMax, scaleFactor):
         rRad = np.sqrt((5.3**2 * 2.4/scaleFactor**3) / zRad)
         if zRad < 0:
             raise ValueError("Nucleus does not fit")
-    zMid = zOffset + zRad + 0.2
+    if nuc_compression == 0:
+        zMid = zOffset + zRad + 0.2
+    else:
+        zMid = zOffset + zRad + 0.05 - nuc_compression
     return (rRad, zRad, 0.0, zMid)
 
 def compute_curvature_1D(

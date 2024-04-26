@@ -67,6 +67,11 @@ def add_mechanotransduction_arguments(parser: argparse.ArgumentParser) -> None:
         default=1.0,
     ) # fractional FAK phosph. rate on nanopillars
     parser.add_argument(
+        "--nucleus-deformation",
+        type=float,
+        default=0.0,
+    ) # fractional FAK phosph. rate on nanopillars
+    parser.add_argument(
         "--axisymmetric",
         action="store_true",
         default=False,
