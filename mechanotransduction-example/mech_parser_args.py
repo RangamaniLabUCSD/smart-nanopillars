@@ -13,7 +13,7 @@ def shape2symfraction(shape: Shape):
     if Shape[shape].value == "circle":
         return 0
     elif Shape[shape].value == "star":
-        return 1 / 2
+        return 1 / 10
     elif Shape[shape].value == "rect":
         return 1 / 4
     else:

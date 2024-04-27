@@ -36,13 +36,13 @@ mv ${{SLURM_JOBID}}-* ${{SCRATCH_DIRECTORY}}
 tscc_template = dedent(
     """#!/bin/bash
 #SBATCH --job-name="{job_name}"
-#SBATCH --partition=condo
-#SBATCH --time=100:00:00
+#SBATCH --partition=platinum
+#SBATCH --time=200:00:00
 #SBATCH --ntasks={ntasks}
 #SBATCH --output=%j-%x-stdout.txt
 #SBATCH --error=%j-%x-stderr.txt
 #SBATCH --account=csd786
-#SBATCH --qos=condo
+#SBATCH --qos=hcp-csd765
 
 module load singularitypro/3.11
 module load mpich/ge/gcc/64/3.4.2

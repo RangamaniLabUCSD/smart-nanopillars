@@ -8,7 +8,7 @@ import numpy as np
 import dolfin as d
 from mpi4py import MPI
 from sympy.parsing.sympy_parser import parse_expr
-from smart.mesh_tools import implicit_curve, compute_curvature, gmsh_to_dolfin
+from smart.mesh_tools import implicit_curve, compute_curvature, gmsh_to_dolfin, facet_topology
 
 def create_3dcell(
     outerExpr: str = "",
@@ -112,7 +112,7 @@ def create_3dcell(
     gmsh.model.add("3dcell")
     # first add outer body and revolve
     if thetaExpr != "":
-        num_theta = 81
+        num_theta = 161#81
         if "rect" in thetaExpr:
             try:
                 AR = float(thetaExpr[4:])
@@ -136,9 +136,11 @@ def create_3dcell(
                                        2*np.pi, num_per_eighth+1)
             thetaVec = np.concatenate([theta_range1, theta_range2, theta_range3, 
                                        theta_range4, theta_range5])
-            thetaVec[-1] = 0.0 # for exactness, replace 2*pi with 0.0
             if sym_fraction < 1:
-                thetaVec = thetaVec[thetaVec <= 2*np.pi*sym_fraction+1e-12]
+                thetaVec = thetaVec[thetaVec <= 2*np.pi*sym_fraction-theta_incr]
+                thetaVec = np.concatenate([thetaVec, [2*np.pi*sym_fraction]])
+            else:
+                thetaVec[-1] = 0.0 # for exactness, replace 2*pi with 0.0
             scaleVec = []
             for j in range(len(thetaVec)):
                 if np.abs(np.tan(thetaVec[j])) <= b_rect / a_rect:
@@ -169,17 +171,27 @@ def create_3dcell(
                             scaleVec[j] *= np.sqrt(xCircle**2+yCircle**2)/np.sqrt(xCur**2 + yCur**2)
                         else:
                             raise ValueError(f"Unable to smooth corners for {thetaExpr}")
-
+            # define test values for smoothing below
+            xVals = rValsOuter[-1]*np.multiply(np.array(scaleVec), np.cos(np.array(thetaVec)))
+            yVals = rValsOuter[-1]*np.multiply(np.array(scaleVec), np.sin(np.array(thetaVec)))
+            
         else:
             thetaVec = np.linspace(0.0, 2*np.pi*sym_fraction, round(num_theta*sym_fraction))
-            thetaVec[-1] = 0.0 # for exactness, replace 2*pi with 0.0
+            if sym_fraction == 1:
+                thetaVec[-1] = 0.0 # for exactness, replace 2*pi with 0.0
             thetaExprSym = parse_expr(thetaExpr)
             scaleVec = []
             for j in range(len(thetaVec)):
                 scaleVec.append(float(thetaExprSym.subs({"theta": thetaVec[j]})))
+            # define test values for smoothing below
+            thetaTest = np.linspace(0.0, 2*np.pi, num_theta)
+            scaleVecTest = []
+            for j in range(len(thetaTest)):
+                scaleVecTest.append(float(thetaExprSym.subs({"theta": thetaTest[j]})))
+            xVals = rValsOuter[-1]*np.multiply(np.array(scaleVecTest), np.cos(np.array(thetaTest)))
+            yVals = rValsOuter[-1]*np.multiply(np.array(scaleVecTest), np.sin(np.array(thetaTest)))
+        dtheta = min(2*np.pi/(num_theta-1), hEdge/max(xVals), hEdge/max(yVals))
         # define a smooth shape (ellipsoid) to average out sharp edges
-        xVals = np.multiply(np.array(scaleVec), np.cos(np.array(thetaVec)))
-        yVals = np.multiply(np.array(scaleVec), np.sin(np.array(thetaVec)))
         AR = (np.max(xVals) - np.min(xVals)) / (np.max(yVals) - np.min(yVals))
         a = np.sqrt(AR)
         b = 1/np.sqrt(AR)
@@ -190,6 +202,7 @@ def create_3dcell(
             scaleVecSmooth.append(float(thetaExprSmooth.subs({"theta": thetaVec[j]})))
     else:
         thetaVec = [0]
+        dtheta = hEdge/max(rValsOuter)
     cell_plane_tag = []
     bottom_point_list = []
     outer_spline_list = []
@@ -200,7 +213,7 @@ def create_3dcell(
     if thetaExpr != "":
         # define theta dependence
         for j in range(len(thetaVec)):
-            if j == (len(thetaVec)-1):
+            if j == (len(thetaVec)-1) and sym_fraction == 1:
                 outer_spline_list.append(outer_spline_list[0])
                 bottom_point_list.append(bottom_point_list[0])
             else:
@@ -237,9 +250,9 @@ def create_3dcell(
             bottom_surf = gmsh.model.occ.add_plane_surface([bottom_loop])
             origin_line = gmsh.model.occ.add_line(origin_tag, top_point)
             front_loop = gmsh.model.occ.add_curve_loop([origin_line, outer_spline_list[0], bottom_line1])
-            front_surf = gmsh.model.occ.add_bspline_filling(front_loop)
+            front_surf = gmsh.model.occ.add_plane_surface([front_loop])
             back_loop = gmsh.model.occ.add_curve_loop([origin_line, outer_spline_list[-1], bottom_line2])
-            back_surf = gmsh.model.occ.add_bspline_filling(back_loop)
+            back_surf = gmsh.model.occ.add_plane_surface([back_loop])
             cur_surf_loop = gmsh.model.occ.add_surface_loop([bottom_surf, front_surf, back_surf, *edge_surf_list])
             outer_shape = gmsh.model.occ.add_volume([cur_surf_loop])
             outer_shape = [(3, outer_shape)]
@@ -394,6 +407,25 @@ def create_3dcell(
     # remove tmp mesh and tmp folder
     gmsh_file.unlink(missing_ok=False)
     tmp_folder.rmdir()
+    # fix mf2 labels in certain cases
+    for f in d.facets(dmesh):
+        topology, cellIndices = facet_topology(f, mf3)
+        if topology == "boundary":
+            mf2.set_value(f.index(), outer_marker)
+        elif topology == "interface":
+            mf2.set_value(f.index(), interface_marker)
+        else:
+            mf2.set_value(f.index(), 0)
+
+    # if applicable, exclude no flux surfaces from boundary
+    if sym_fraction < 1:
+        for f in d.facets(dmesh):
+            # calculate current angle theta
+            theta_cur = np.arctan2(f.midpoint().y(), f.midpoint().x())
+            if (np.abs(theta_cur-2*np.pi*sym_fraction) < dtheta/10 or 
+                np.abs(theta_cur) < dtheta/10):
+                mf2.set_value(f.index(), 0)
+
     # return dolfin mesh, mf2 (2d tags) and mf3 (3d tags)
     if return_curvature:
         if innerExpr == "":
