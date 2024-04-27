@@ -14,16 +14,16 @@ python3 main.py cru-preprocess --input-mesh-file /root/shared/gitrepos/smart-com
 echo "Saving meshes for mechanotransduction example"
 # Create meshes with symm considerations
 echo "Writing axisymmetric circle mesh..."
-python3 main.py mechanotransduction-preprocess --shape circle --hEdge 0.1 --hInnerEdge 0.1 --mesh-folder /root/shared/write-meshes/mechanotransduction/meshes/circle_hEdge_0.1_full3dfalse #/root/scratch/write-meshes/mechanotransduction/meshes/circle_hEdge_0.1_full3dfalse
+python3 main.py mechanotransduction-preprocess --shape circle --hEdge 0.1 --hInnerEdge 0.1 --mesh-folder /root/scratch/write-meshes/mechanotransduction/meshes/circle_hEdge_0.1_full3dfalse
 echo "Writing quarter rect mesh..."
-python3 main.py mechanotransduction-preprocess --shape rect --hEdge 0.3 --hInnerEdge 0.3 --mesh-folder /root/shared/write-meshes/mechanotransduction/meshes/rect_hEdge_0.3_full3dfalse #/root/scratch/write-meshes/mechanotransduction/meshes/rect_hEdge_0.3_full3dfalse
+python3 main.py mechanotransduction-preprocess --shape rect --hEdge 0.3 --hInnerEdge 0.3 --mesh-folder /root/scratch/write-meshes/mechanotransduction/meshes/rect_hEdge_0.3_full3dfalse
 echo "Writing half star mesh..."
-python3 main.py mechanotransduction-preprocess --shape star --hEdge 0.3 --hInnerEdge 0.3 --mesh-folder /root/shared/write-meshes/mechanotransduction/meshes/star_hEdge_0.3_full3dfalse #/root/scratch/write-meshes/mechanotransduction/meshes/star_hEdge_0.3_full3dfalse
+python3 main.py mechanotransduction-preprocess --shape star --hEdge 0.3 --hInnerEdge 0.3 --mesh-folder /root/scratch/write-meshes/mechanotransduction/meshes/star_hEdge_0.3_full3dfalse
 # Create full 3d meshes
 echo "Writing full circle mesh..."
-python3 main.py mechanotransduction-preprocess --shape circle --hEdge 0.3 --hInnerEdge 0.3 --full-3d --mesh-folder /root/shared/write-meshes/mechanotransduction/meshes/circle_hEdge_0.3_full3dtrue #/root/scratch/write-meshes/mechanotransduction/meshes/circle_hEdge_0.3_full3dtrue
+python3 main.py mechanotransduction-preprocess --shape circle --hEdge 0.3 --hInnerEdge 0.3 --full-3d --mesh-folder /root/scratch/write-meshes/mechanotransduction/meshes/circle_hEdge_0.3_full3dtrue
 echo "Writing full rect mesh..."
-python3 main.py mechanotransduction-preprocess --shape rect --hEdge 0.3 --hInnerEdge 0.3 --full-3d --mesh-folder /root/shared/write-meshes/mechanotransduction/meshes/rect_hEdge_0.3_full3dtrue #/root/scratch/write-meshes/mechanotransduction/meshes/rect_hEdge_0.3_full3dtrue
+python3 main.py mechanotransduction-preprocess --shape rect --hEdge 0.3 --hInnerEdge 0.3 --full-3d --mesh-folder /root/scratch/write-meshes/mechanotransduction/meshes/rect_hEdge_0.3_full3dtrue
 echo "Writing full star mesh..."
-python3 main.py mechanotransduction-preprocess --shape star --hEdge 0.3 --hInnerEdge 0.3 --full-3d --mesh-folder /root/shared/write-meshes/mechanotransduction/meshes/star_hEdge_0.3_full3dtrue #/root/scratch/write-meshes/mechanotransduction/meshes/star_hEdge_0.3_full3dtrue
+python3 main.py mechanotransduction-preprocess --shape star --hEdge 0.3 --hInnerEdge 0.3 --full-3d --mesh-folder /root/scratch/write-meshes/mechanotransduction/meshes/star_hEdge_0.3_full3dtrue
 echo "Done."
