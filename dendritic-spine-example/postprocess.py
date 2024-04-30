@@ -103,12 +103,14 @@ def load_all_data(main_path: Path):
     return all_data
 
 
-def plot_data(all_data: list[Data], output_folder, format: str = "png"):
 
-    data = [d for d in all_data if d.ntasks == 1]
-    fig, ax = plt.subplots(2, 4, sharex=True, sharey="row", figsize=(15, 8))
+def plot_data_vs_timestep(all_data: list[Data], output_folder, format: str = "png"):
+
+    data = [d for d in all_data if d.ntasks == 1 and "coarser" in d.mesh and d.dt > 0.000125]
+
+    fig, ax = plt.subplots(2, 3, sharex=True, sharey="row", figsize=(15, 8))
       
-    mesh2index = {"1spine_mesh_coarser": 0, "1spine_mesh_coarser_refined_1": 1, "1spine_mesh_coarser_refined_2": 2,  "1spine_mesh": 3}
+    mesh2index = {"1spine_mesh_coarser": 0, "1spine_mesh_coarser_refined_1": 1, "1spine_mesh_coarser_refined_2": 2}
     
     dts = list(sorted({d.dt for d in data}))
     dts2color = {d: c for d, c in zip(dts, cycle(plt.cm.tab10.colors))}
@@ -137,7 +139,7 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
 
     lgd = fig.legend(lines, labels, title="Time step", loc="center right", bbox_to_anchor=(1.1, 0.5))
     fig.subplots_adjust(right=0.99)
-    fig.savefig((output_folder / "results.png").with_suffix(f".{format}"), bbox_extra_artists=(lgd,), bbox_inches="tight")
+    fig.savefig((output_folder / "results_vs_time.png").with_suffix(f".{format}"), bbox_extra_artists=(lgd,), bbox_inches="tight")
 
 
     # Plot timings
@@ -156,7 +158,7 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
    
 
 def plot_refinement_study(all_data: list[Data], output_folder, format: str = "png"):
-    data = sorted([d for d in all_data if "coarser" in d.mesh], key=lambda x: x.num_refinements)
+    data = sorted([d for d in all_data if "coarser" in d.mesh and d.dt > 0.000125], key=lambda x: x.num_refinements)
     dts = list(sorted({d.dt for d in data}))
     num_refinements = list(sorted({d.num_refinements for d in data}))
     # Find index where we have all refinements
@@ -258,7 +260,8 @@ def main(results_folder: Path, output_folder: Path,
             json.dumps([r.to_json() for r in all_results], indent=4)
         )
 
-    plot_data(all_results, output_folder, format=format)
+
+    plot_data_vs_timestep(all_results, output_folder, format=format)
     plot_refinement_study(all_results, output_folder, format=format)
     return 0
 
