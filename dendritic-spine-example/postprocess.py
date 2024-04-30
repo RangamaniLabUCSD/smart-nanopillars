@@ -103,7 +103,6 @@ def load_all_data(main_path: Path):
         all_data.append(data)
     return all_data
 
-
 def plot_data(all_data: list[Data], output_folder, format: str = "png"):
     data = [d for d in all_data if d.ntasks == 1]
     fig, ax = plt.subplots(2, 4, sharex=True, sharey="row", figsize=(15, 8))
@@ -114,7 +113,7 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
         "1spine_mesh_coarser_refined_2": 2,
         "1spine_mesh": 3,
     }
-
+    
     dts = list(sorted({d.dt for d in data}))
     dts2color = {d: c for d, c in zip(dts, cycle(plt.cm.tab10.colors))}
 

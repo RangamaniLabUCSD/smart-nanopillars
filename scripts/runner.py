@@ -36,13 +36,13 @@ mv ${{SLURM_JOBID}}-* ${{SCRATCH_DIRECTORY}}
 tscc_template = dedent(
     """#!/bin/bash
 #SBATCH --job-name="{job_name}"
-#SBATCH --partition=condo
-#SBATCH --time=100:00:00
+#SBATCH --partition=platinum
+#SBATCH --time=200:00:00
 #SBATCH --ntasks={ntasks}
 #SBATCH --output=%j-%x-stdout.txt
 #SBATCH --error=%j-%x-stderr.txt
 #SBATCH --account=csd786
-#SBATCH --qos=condo
+#SBATCH --qos=hcp-csd765
 
 module load singularitypro/3.11
 module load mpich/ge/gcc/64/3.4.2
@@ -70,7 +70,7 @@ def run(
     args,
     dry_run: bool,
     script: str,
-    submit_ex3: bool, # FIXME: Change this and next param to enum
+    submit_ex3: bool,  # FIXME: Change this and next param to enum
     submit_tscc: bool,
     job_name: str = "",
     ntasks: int = 1,
@@ -87,10 +87,7 @@ def run(
     elif submit_tscc:
         template = tscc_template
     else:
-        if ntasks > 1:
-           sp.run([sys.executable, script, *args])
-        else:
-            sp.run(["mpirun", "-n", str(ntasks), sys.executable, script, *in_args])
+        sp.run(["mpirun", "-n", str(ntasks), sys.executable, script, *in_args])
         return
 
     job_file = Path("tmp_job.sbatch")
@@ -129,7 +126,7 @@ def preprocess_phosphorylation_mesh(
     ]
     if axisymmetric:
         args.append("--axisymmetric")
-    
+
     if rect:
         args.append("--rect")
 
@@ -185,13 +182,13 @@ def phosphorylation_example(
 
     if rect:
         args.append("--rect")
-    
+
     if write_checkpoint:
         args.append("--write-checkpoint")
 
     if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
-        
+
     script = (
         (here / ".." / "phosphorylation-example" / "phosphorylation.py")
         .absolute()
@@ -448,7 +445,7 @@ def postprocess_mechanotransduction(
         args.append("--skip-if-processed")
     if use_tex:
         args.append("--use-tex")
-        
+
     script = (
         (here / ".." / "mechanotransduction-example" / "postprocess.py")
         .absolute()
@@ -518,12 +515,7 @@ def cru_example(
     if submit_ex3 is False:
         args.extend(["--outdir", Path(outdir).as_posix()])
 
-    script = (
-        (here / ".." / "cru-example" / "cru.py")
-        .absolute()
-        .resolve()
-        .as_posix()
-    )
+    script = (here / ".." / "cru-example" / "cru.py").absolute().resolve().as_posix()
     run(
         job_name="cru",
         args=args,
@@ -563,6 +555,7 @@ def preprocess_spine_mesh(
         submit_ex3=False,
         submit_tscc=False,
     )
+
 
 def dendritic_spine_postprocess(
     results_folder: Path,

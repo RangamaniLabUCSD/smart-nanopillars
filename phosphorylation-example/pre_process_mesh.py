@@ -23,16 +23,27 @@ def main(
     print(f"Generating mesh with hEdge={hEdge}")
     # initialize current mesh
     if rect:
-        xSize, ySize, zSize = curRadius*10, curRadius*10, curRadius
-        cell_mesh = d.BoxMesh(d.Point(0.0, 0.0, 0.0), d.Point(xSize, ySize, zSize), 10, 10, 2**(num_refinements+1))
+        xSize, ySize, zSize = curRadius * 10, curRadius * 10, curRadius
+        cell_mesh = d.BoxMesh(
+            d.Point(0.0, 0.0, 0.0), d.Point(xSize, ySize, zSize), 10, 10, 2
+        )
+        for _ in range(num_refinements):
+            cell_mesh = d.refine(cell_mesh, redistribute=False)
+
         cell_markers = d.MeshFunction("size_t", cell_mesh, 3, 1)
         facet_markers = d.MeshFunction("size_t", cell_mesh, 2, 0)
-        for f in d.facets(cell_mesh):
-            x, y, z = f.midpoint()[:]
-            if np.isclose(z, 0.) or np.isclose(z, zSize):
-                    # or np.isclose(y, 0.) or np.isclose(y, ySize)\
-                    # or np.isclose(z, 0.) or np.isclose(z, zSize):
-                facet_markers[f] = 10
+        z0 = d.CompiledSubDomain("near(x[2], 0.0)")
+        z1 = d.CompiledSubDomain("near(x[2], zSize)", zSize=zSize)
+        facet_markers.set_all(0)
+        z0.mark(facet_markers, 10)
+        z1.mark(facet_markers, 10)
+
+        # for f in d.facets(cell_mesh):
+        #     x, y, z = f.midpoint()[:]
+        #     if np.isclose(z, 0.) or np.isclose(z, zSize):
+        #             # or np.isclose(y, 0.) or np.isclose(y, ySize)\
+        #             # or np.isclose(z, 0.) or np.isclose(z, zSize):
+        #         facet_markers[f] = 10
     elif axisymmetric:
         cell_mesh, facet_markers, cell_markers = mesh_tools.create_2Dcell(
             outerExpr=f"r**2 + (z-({curRadius}+1))**2 - {curRadius}**2",
