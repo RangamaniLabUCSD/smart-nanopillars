@@ -1,6 +1,6 @@
 import dolfin as d
 import smart
-import h5py
+# import h5py
 import numpy as np
 from matplotlib import pyplot as plt
 import pandas as pd
@@ -12,6 +12,75 @@ from tkinter import filedialog
 from tkinter import messagebox
 root = tk.Tk()
 root.withdraw()
+
+def load_solution(mesh_file="", results_file="", idx=0):
+    """
+    Load solution at a single time point.
+    mesh_file and results_file are required inputs, if they are empty
+    strings the function will throw an error.
+
+    Args:
+        mesh_file: path to hdf5 file with dolfin mesh and mesh functions
+        results_file: path to XDMF file to load results from
+        idx: index at which to load data
+    
+    Returns:
+        dvec: dolfin vector at entry number idx in XDMF file 
+    """
+    # load mesh
+    comm = d.MPI.comm_world
+    dmesh = d.Mesh(comm)
+    hdf5 = d.HDF5File(comm, mesh_file, "r")
+    hdf5.read(dmesh, "/mesh", False)
+    dim = dmesh.topology().dim()
+
+    # load mesh functions that define the domains
+    mf_cell = d.MeshFunction("size_t", dmesh, dim, value=0)
+    mf_facet = d.MeshFunction("size_t", dmesh, dim-1, value=0)
+    hdf5.read(mf_cell, f"/mf{dim}")
+    hdf5.read(mf_facet, f"/mf{dim-1}")
+    hdf5.close()
+
+    # load data vector
+    # cur_file = h5py.File(results_file, "r")
+    # cur_array = cur_file["VisualisationVector"][str(idx)][:]
+    cur_file = d.HDF5File(comm, str(results_file), "r")
+    cur_array = d.Vector()
+    cur_file.read(cur_array, f"VisualisationVector/{idx}", True)
+    cur_array = cur_array[:]
+
+    # create child mesh associated with this variable
+    cell_vals = np.unique(mf_cell.array())
+    cell_vals = cell_vals[np.logical_and(cell_vals !=0, cell_vals < 1e9)]
+    facet_vals = np.unique(mf_facet.array())
+    facet_vals = facet_vals[np.logical_and(facet_vals !=0, facet_vals < 1e9)]
+    child_meshes = []
+    child_mesh_len = []
+    for i in range(len(cell_vals)+len(facet_vals)):
+        if i < len(cell_vals):
+            mesh = d.create_meshview(mf_cell, cell_vals[i])
+        else:
+            mesh = d.create_meshview(mf_facet, facet_vals[i-len(cell_vals)])
+        child_meshes.append(mesh)
+        child_mesh_len.append(len(mesh.coordinates()))
+    find_mesh = len(cur_array) == np.array(child_mesh_len)
+    if len(np.nonzero(find_mesh)[0]) != 1:
+        ValueError("Could not identify submesh")
+    else:
+        cur_mesh = child_meshes[np.nonzero(find_mesh)[0][0]]
+    
+    # initialize function space for variable
+    Vcur = d.FunctionSpace(cur_mesh, "P", 1)
+    dvec = d.Function(Vcur)
+    dof_map = d.dof_to_vertex_map(Vcur)[:]
+
+    # array matches mesh ordering; reorder according to dof mapping for Vcur
+    cur_array = cur_array[dof_map]
+    dvec.vector().set_local(cur_array)
+    dvec.vector().apply("insert")
+
+    return dvec
+
 
 def analyze_all(mesh_file="", results_path="", display=True, axisymm=False, 
                 subdomain=[], ind_files=False):
@@ -29,6 +98,11 @@ def analyze_all(mesh_file="", results_path="", display=True, axisymm=False,
     Args:
         mesh_file: path to hdf5 file with dolfin mesh and mesh functions
         results_path: path to folder with SMART results (XDMF files and all associated HDF5s)
+        display: Boolean variable to indicate whether plot should automatically display
+        axiymm: Boolean variable for axisymmetric case
+        subdomain: 6-element list (optional) to specify a box for integration over
+                   [x0, y0, z0, x1, y1, z1]
+        ind_files: Boolean variable, True if each time point is stored in a separate file
     
     Returns:
         tVec: list of time vectors from each results file
@@ -38,17 +112,15 @@ def analyze_all(mesh_file="", results_path="", display=True, axisymm=False,
         messagebox.showinfo(title="Load mesh file.",
                             message="Please select the mesh file.")
         mesh_file = filedialog.askopenfilename()
-    parent_mesh = smart.mesh.ParentMesh(
-        mesh_filename=mesh_file,
-        mesh_filetype="hdf5",
-        name="parent_mesh",)
 
-    comm = parent_mesh.mpi_comm
-    dmesh = parent_mesh.dolfin_mesh
-    dim = parent_mesh.dimensionality
+    comm = d.MPI.comm_world
+    dmesh = d.Mesh(comm)
+    hdf5 = d.HDF5File(comm, str(mesh_file), "r")
+    hdf5.read(dmesh, "/mesh")
+    dim = dmesh.topology().dim()
+
     mf_cell = d.MeshFunction("size_t", dmesh, dim, value=0)
     mf_facet = d.MeshFunction("size_t", dmesh, dim-1, value=0)
-    hdf5 = d.HDF5File(comm, mesh_file, "r")
     hdf5.read(mf_cell, f"/mf{dim}")
     hdf5.read(mf_facet, f"/mf{dim-1}")
     hdf5.close()
@@ -101,9 +173,13 @@ def analyze_all(mesh_file="", results_path="", display=True, axisymm=False,
 
     results_stored = []
     for j in range(len(results_file_list)):
-        cur_file = h5py.File(f"{results_path}/{results_file_list[j]}", "r")
+        # cur_file = h5py.File(f"{results_path}/{results_file_list[j]}", "r")
+        cur_file = d.HDF5File(comm, f"{results_path}/{results_file_list[j]}", "r")
         try:
-            test_array = cur_file["VisualisationVector"]["0"][:]
+            # test_array = cur_file["VisualisationVector"]["0"][:]
+            test_array = d.Vector()
+            cur_file.read(test_array, "VisualisationVector/0", True)
+            test_array = test_array[:]
         except:
             results_stored.append([])
             continue
@@ -143,7 +219,10 @@ def analyze_all(mesh_file="", results_path="", display=True, axisymm=False,
 
         for i in range(num_time_points):
             try:
-                cur_array = cur_file["VisualisationVector"][str(i)][:]
+                # cur_array = cur_file["VisualisationVector"][str(i)][:]
+                cur_array = d.Vector()
+                cur_file.read(cur_array, f"VisualisationVector/{i}", True)
+                cur_array = cur_array[:]
             except:
                 var_avg.append(0.0)
                 continue
