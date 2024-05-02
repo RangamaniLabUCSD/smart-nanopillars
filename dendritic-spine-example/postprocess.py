@@ -371,7 +371,7 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
 
         err_file.write(u_err, t)
 
-        max_errs.append(max(u_err.vector()))
+        max_errs.append(max(np.abs(u_err.vector()[:])))
         l2_errs.append(np.sqrt(dolfin.assemble((u_coarsest_interp - u_finest)**2 *dx_finest)))
         l1_errs.append(dolfin.assemble(ufl.algebra.Abs(u_coarsest_interp - u_finest) *dx_finest))
         print(f"Processed error data {i+1} of {len(coarsest_data.t)}")
