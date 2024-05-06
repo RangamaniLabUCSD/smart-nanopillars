@@ -7,7 +7,7 @@ import os
 import re
 
 
-def load_solution(mesh_file="", results_file="", idx=0):
+def load_solution(mesh_file="", results_file="", idx=0, name="Ca"):
     """
     Load solution at a single time point.
     mesh_file and results_file are required inputs, if they are empty
@@ -32,24 +32,35 @@ def load_solution(mesh_file="", results_file="", idx=0):
     # load mesh
     comm = d.MPI.comm_world
     dmesh = d.Mesh(comm)
-    hdf5 = d.HDF5File(comm, mesh_file, "r")
-    hdf5.read(dmesh, "/mesh", False)
-    dim = dmesh.topology().dim()
+    with d.HDF5File(comm, mesh_file, "r") as hdf5:
+        hdf5.read(dmesh, "/mesh", False)
+        dim = dmesh.topology().dim()
 
-    # load mesh functions that define the domains
-    mf_cell = d.MeshFunction("size_t", dmesh, dim, value=0)
-    mf_facet = d.MeshFunction("size_t", dmesh, dim - 1, value=0)
-    hdf5.read(mf_cell, f"/mf{dim}")
-    hdf5.read(mf_facet, f"/mf{dim-1}")
-    hdf5.close()
+        # load mesh functions that define the domains
+        mf_cell = d.MeshFunction("size_t", dmesh, dim, value=0)
+        mf_facet = d.MeshFunction("size_t", dmesh, dim - 1, value=0)
+        hdf5.read(mf_cell, f"/mf{dim}")
+        hdf5.read(mf_facet, f"/mf{dim-1}")
 
     # load data vector
-    # cur_file = h5py.File(results_file, "r")
+
     # cur_array = cur_file["VisualisationVector"][str(idx)][:]
-    cur_file = d.HDF5File(comm, str(results_file), "r")
-    cur_array = d.Vector()
-    cur_file.read(cur_array, f"VisualisationVector/{idx}", True)
-    cur_array = cur_array[:]
+    is_checkpoint = False
+    with d.HDF5File(comm, str(results_file), "r") as cur_file:
+        cur_array = d.Vector()
+        if cur_file.has_dataset("VisualisationVector"):
+            cur_file.read(cur_array, f"VisualisationVector/{idx}", True)
+            array_size = cur_array.size()
+        elif cur_file.has_dataset(f"{name}/{name}_{idx}"):
+            is_checkpoint = True
+            import h5py
+
+            with h5py.File(results_file, "r") as h5_file:
+                array_size = h5_file[f"{name}/{name}_{idx}/mesh/geometry"].shape[0]
+
+        else:
+            raise ValueError("Could not find dataset in file")
+        cur_array = cur_array[:]
 
     # create child mesh associated with this variable
     cell_vals = np.unique(mf_cell.array())
@@ -65,7 +76,7 @@ def load_solution(mesh_file="", results_file="", idx=0):
             mesh = d.create_meshview(mf_facet, facet_vals[i - len(cell_vals)])
         child_meshes.append(mesh)
         child_mesh_len.append(len(mesh.coordinates()))
-    find_mesh = len(cur_array) == np.array(child_mesh_len)
+    find_mesh = array_size == np.array(child_mesh_len)
     if len(np.nonzero(find_mesh)[0]) != 1:
         ValueError("Could not identify submesh")
     else:
@@ -74,14 +85,40 @@ def load_solution(mesh_file="", results_file="", idx=0):
     # initialize function space for variable
     Vcur = d.FunctionSpace(cur_mesh, "P", 1)
     dvec = d.Function(Vcur)
-    dof_map = d.dof_to_vertex_map(Vcur)[:]
 
-    # array matches mesh ordering; reorder according to dof mapping for Vcur
-    cur_array = cur_array[dof_map]
-    dvec.vector().set_local(cur_array)
-    dvec.vector().apply("insert")
+    if is_checkpoint:
+        while True:
+            print(f"Reading checkpoint {idx}")
+            try:
+                with d.XDMFFile(
+                    comm, Path(results_file).with_suffix(".xdmf").as_posix()
+                ) as xdmf:
+                    xdmf.read_checkpoint(dvec, name, idx)
+            except RuntimeError:
+                break
+            else:
+                idx += 1
+                yield dvec
+    else:
+        while True:
+            try:
+                with d.HDF5File(comm, str(results_file), "r") as cur_file:
+                    cur_array = d.Vector()
+                    if cur_file.has_dataset("VisualisationVector"):
+                        cur_file.read(cur_array, f"VisualisationVector/{idx}", True)
+            except RuntimeError:
+                break
+            else:
+                idx += 1
+                # array matches mesh ordering; reorder according to dof mapping for Vcur
+                dof_map = d.dof_to_vertex_map(Vcur)[:]
 
-    return dvec
+                cur_array = cur_array[dof_map]
+                dvec.vector().set_local(cur_array)
+                dvec.vector().apply("insert")
+                yield dvec
+
+    raise StopIteration
 
 
 def analyze_all(

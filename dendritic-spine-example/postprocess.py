@@ -327,27 +327,21 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
         here / ".." / "scripts" / "meshes-dendritic-spine" / f"{finest_data.mesh}.h5"
     )
     # Load solutions
-    u_coarsest = smart_analysis.load_solution(
+    coarsest_solutions = smart_analysis.load_solution(
         mesh_file_coarsest, coarsest_data.folder / "Ca.h5", 0
     )
-    file_coarsest = dolfin.HDF5File(
-        dolfin.MPI.comm_world, str(coarsest_data.folder / "Ca.h5"), "r"
-    )
-    u_finest = smart_analysis.load_solution(
+
+    finest_solutions = smart_analysis.load_solution(
         mesh_file_finest, finest_data.folder / "Ca.h5", 0
     )
-    file_finest = dolfin.HDF5File(
-        dolfin.MPI.comm_world, str(finest_data.folder / "Ca.h5"), "r"
-    )
-    V_coarsest = u_coarsest.function_space()
+
+    u_coarsest = next(iter(coarsest_solutions))
+    u_finest = next(iter(finest_solutions))
+
     V_finest = u_finest.function_space()
     u_coarsest_interp = dolfin.Function(V_finest)
     u_err = dolfin.Function(V_finest)
     dx_finest = dolfin.Measure("dx", V_finest.mesh())
-    vec_coarsest = dolfin.Vector()
-    vec_finest = dolfin.Vector()
-    dof_map_coarsest = dolfin.dof_to_vertex_map(V_coarsest)[:]
-    dof_map_finest = dolfin.dof_to_vertex_map(V_finest)[:]
 
     u_err_fname = output_folder / "u_err.xdmf"
     u_err_fname.unlink(missing_ok=True)
@@ -358,17 +352,12 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
     max_errs = []
     l2_errs = []
     l1_errs = []
-    for i, t in enumerate(coarsest_data.t):
-        # u_coarsest = smart_analysis.load_solution(mesh_file_coarsest, coarsest_data.folder / "Ca.h5", i)
-        # u_finest = smart_analysis.load_solution(mesh_file_finest, coarsest_data.folder / "Ca.h5", i)
-        try:
-            file_coarsest.read(vec_coarsest, f"VisualisationVector/{i}", True)
-            file_finest.read(vec_finest, f"VisualisationVector/{i}", True)
-        except:
-            print("could not load this hdf5")
-
-        u_coarsest.vector()[:] = vec_coarsest[dof_map_coarsest]
-        u_finest.vector()[:] = vec_finest[dof_map_finest]
+    max_errs = []
+    l2_errs = []
+    l1_errs = []
+    for u_coarsest, u_finest, t in zip(
+        coarsest_solutions, finest_solutions, coarsest_data.t
+    ):
         for j, point in enumerate(V_finest.tabulate_dof_coordinates()):
             u_coarsest_interp.vector()[j] = u_coarsest(point)
             u_err.vector()[j] = u_coarsest_interp.vector()[j] - u_finest.vector()[j]
@@ -383,9 +372,6 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
             dolfin.assemble(ufl.algebra.Abs(u_coarsest_interp - u_finest) * dx_finest)
         )
         print(f"Processed error data {i+1} of {len(coarsest_data.t)}")
-
-    file_coarsest.close()
-    file_finest.close()
 
     # Save as text files
     np.savetxt((output_folder / "max_errs.txt"), max_errs)
