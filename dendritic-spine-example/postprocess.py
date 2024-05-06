@@ -103,6 +103,7 @@ def load_all_data(main_path: Path):
         all_data.append(data)
     return all_data
 
+
 def plot_data(all_data: list[Data], output_folder, format: str = "png"):
     data = [d for d in all_data if d.ntasks == 1]
     fig, ax = plt.subplots(2, 4, sharex=True, sharey="row", figsize=(15, 8))
@@ -113,7 +114,7 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
         "1spine_mesh_coarser_refined_2": 2,
         "1spine_mesh": 3,
     }
-    
+
     dts = list(sorted({d.dt for d in data}))
     dts2color = {d: c for d, c in zip(dts, cycle(plt.cm.tab10.colors))}
 
@@ -283,9 +284,11 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
     here = Path(__file__).parent
     import dolfin
     import sys
+
     sys.path.append((here / ".." / "utils").as_posix())
 
     import smart_analysis
+
     try:
         import ufl_legacy as ufl
     except ImportError:
@@ -298,14 +301,16 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
         num_refinements.append(all_data[i].num_refinements)
         dt.append(all_data[i].dt)
     finest_logic = np.logical_and(
-        np.array(dt)==min(dt), np.array(num_refinements)==max(num_refinements))
+        np.array(dt) == min(dt), np.array(num_refinements) == max(num_refinements)
+    )
     finest_idx = np.nonzero(finest_logic)[0]
     if len(finest_idx) != 1:
         raise ValueError("Could not find the finest mesh case")
     else:
         finest_idx = finest_idx[0]
     coarsest_logic = np.logical_and(
-        np.array(dt)==min(dt), np.array(num_refinements)==min(num_refinements))
+        np.array(dt) == min(dt), np.array(num_refinements) == min(num_refinements)
+    )
     coarsest_idx = np.nonzero(coarsest_logic)[0]
     if len(coarsest_idx) != 1:
         raise ValueError("Could not find the coarsest mesh case")
@@ -315,26 +320,25 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
     finest_data = all_data[finest_idx]
 
     # pull out mesh files from data structure
-    mesh_file_coarsest=str(
-        here
-        / ".."
-        / "scripts"
-        / "meshes-dendritic-spine"
-        / f"{coarsest_data.mesh}.h5"
+    mesh_file_coarsest = str(
+        here / ".." / "scripts" / "meshes-dendritic-spine" / f"{coarsest_data.mesh}.h5"
     )
-    mesh_file_finest=str(
-        here
-        / ".."
-        / "scripts"
-        / "meshes-dendritic-spine"
-        / f"{finest_data.mesh}.h5"
+    mesh_file_finest = str(
+        here / ".." / "scripts" / "meshes-dendritic-spine" / f"{finest_data.mesh}.h5"
     )
-
     # Load solutions
-    u_coarsest = smart_analysis.load_solution(mesh_file_coarsest, coarsest_data.folder / "Ca.h5", 0)
-    file_coarsest = dolfin.HDF5File(dolfin.MPI.comm_world, str(coarsest_data.folder / "Ca.h5"), "r")
-    u_finest = smart_analysis.load_solution(mesh_file_finest, finest_data.folder / "Ca.h5", 0)
-    file_finest = dolfin.HDF5File(dolfin.MPI.comm_world, str(finest_data.folder / "Ca.h5"), "r")
+    u_coarsest = smart_analysis.load_solution(
+        mesh_file_coarsest, coarsest_data.folder / "Ca.h5", 0
+    )
+    file_coarsest = dolfin.HDF5File(
+        dolfin.MPI.comm_world, str(coarsest_data.folder / "Ca.h5"), "r"
+    )
+    u_finest = smart_analysis.load_solution(
+        mesh_file_finest, finest_data.folder / "Ca.h5", 0
+    )
+    file_finest = dolfin.HDF5File(
+        dolfin.MPI.comm_world, str(finest_data.folder / "Ca.h5"), "r"
+    )
     V_coarsest = u_coarsest.function_space()
     V_finest = u_finest.function_space()
     u_coarsest_interp = dolfin.Function(V_finest)
@@ -372,10 +376,14 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
         err_file.write(u_err, t)
 
         max_errs.append(max(np.abs(u_err.vector()[:])))
-        l2_errs.append(np.sqrt(dolfin.assemble((u_coarsest_interp - u_finest)**2 *dx_finest)))
-        l1_errs.append(dolfin.assemble(ufl.algebra.Abs(u_coarsest_interp - u_finest) *dx_finest))
+        l2_errs.append(
+            np.sqrt(dolfin.assemble((u_coarsest_interp - u_finest) ** 2 * dx_finest))
+        )
+        l1_errs.append(
+            dolfin.assemble(ufl.algebra.Abs(u_coarsest_interp - u_finest) * dx_finest)
+        )
         print(f"Processed error data {i+1} of {len(coarsest_data.t)}")
-    
+
     file_coarsest.close()
     file_finest.close()
 
