@@ -9,17 +9,20 @@ import re
 
 def load_solution(mesh_file="", results_file="", idx=0, name="Ca"):
     """
-    Load solution at a single time point.
+    Load solution at all time points starting from a given point.
     mesh_file and results_file are required inputs, if they are empty
     strings the function will throw an error.
+
+    Note that this function returns a generator, so the user must
+    iterate over the generator to get the solution at each time point.
 
     Args:
         mesh_file: path to hdf5 file with dolfin mesh and mesh functions
         results_file: path to XDMF file to load results from
-        idx: index at which to load data
+        idx: index at which to start
 
     Returns:
-        dvec: dolfin vector at entry number idx in XDMF file
+        dvec: dolfin function with solution at each time point
     """
 
     if mesh_file == "" or results_file == "":
