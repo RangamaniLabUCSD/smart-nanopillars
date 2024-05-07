@@ -112,7 +112,7 @@ def create_3dcell(
     gmsh.model.add("3dcell")
     # first add outer body and revolve
     if thetaExpr != "":
-        num_theta = 161#81
+        num_theta = 11#81
         if "rect" in thetaExpr:
             try:
                 AR = float(thetaExpr[4:])
@@ -176,7 +176,7 @@ def create_3dcell(
             yVals = rValsOuter[-1]*np.multiply(np.array(scaleVec), np.sin(np.array(thetaVec)))
             
         else:
-            thetaVec = np.linspace(0.0, 2*np.pi*sym_fraction, round(num_theta*sym_fraction))
+            thetaVec = np.linspace(0.0, 2*np.pi*sym_fraction, round((num_theta-1)*sym_fraction)+1)
             if sym_fraction == 1:
                 thetaVec[-1] = 0.0 # for exactness, replace 2*pi with 0.0
             thetaExprSym = parse_expr(thetaExpr)

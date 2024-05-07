@@ -77,13 +77,41 @@ def load_all_data(main_path: Path):
     return all_data
 
 
-def get_ode_solution(e_val):
-    nuc_vol = 70.6
-    nm_area = 58.5
-    Ac = 133
+def get_ode_solution(e_val, mesh_file=""):
+    if mesh_file == "": # then use default values from R13 mesh
+        nuc_vol = 70.6
+        nm_area = 58.5
+        cyto_vol = 1925.03/4
+        pm_area = 1294.5/4
+        Ac = 133
+    else: # calculate volumes and surface areas via integration
+        import dolfin as d
+        comm = d.MPI.comm_world
+        dmesh = d.Mesh(comm)
+        hdf5 = d.HDF5File(comm, mesh_file, "r")
+        hdf5.read(dmesh, "/mesh", False)
+        dim = dmesh.topology().dim()
+        # load mesh functions that define the domains
+        mf_cell = d.MeshFunction("size_t", dmesh, dim, value=0)
+        mf_facet = d.MeshFunction("size_t", dmesh, dim-1, value=0)
+        hdf5.read(mf_cell, f"/mf{dim}")
+        hdf5.read(mf_facet, f"/mf{dim-1}")
+        hdf5.close()
+        # create mesh function for substrate
+        substrate =  d.CompiledSubDomain("near(x[2], 0.0) && on_boundary")
+        mf_substrate = d.MeshFunction("size_t", dmesh, dim-1, value=0)
+        substrate.mark(mf_substrate, 11)
+        # define integration measures and then compute vols and areas
+        dx = d.Measure("dx", dmesh, subdomain_data=mf_cell)
+        ds = d.Measure("ds", dmesh, subdomain_data=mf_facet)
+        ds_substrate = d.Measure("ds", dmesh, subdomain_data=mf_substrate)
+        nuc_vol = d.assemble(1.0*dx(2))
+        nm_area = d.assemble(1.0*ds(12))
+        cyto_vol = d.assemble(1.0*dx(1))
+        pm_area = d.assemble(1.0*ds(10))
+        Ac = d.assemble(1.0*ds_substrate(11))
 
-    geoParam = [1925.03/4, nuc_vol, 1294.5/4, nm_area, Ac]
-
+    geoParam = [cyto_vol, nuc_vol, pm_area, nm_area, Ac]
     return mechanotransduction_ode_calc([0, 10000], e_val, geoParam)
 
 
@@ -108,7 +136,7 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
         timings.append(float(d.total_run_time))
 
     # Plot ODE soltution
-    t_ode, ode_results = get_ode_solution(d.e_val)
+    t_ode, ode_results = get_ode_solution(data[0].e_val)
     ax[0].plot(t_ode, ode_results[:,ode_yap_idx], linestyle='dashed', label=f"ODE solution")
     ax[1].plot(t_ode, ode_results[:,ode_fac_idx], linestyle='dashed', label=f"ODE solution")
     
