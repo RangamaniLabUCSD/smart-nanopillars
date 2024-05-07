@@ -235,6 +235,49 @@ def load_data(folder: Path = Path("82094")) -> Data:
     ntasks = parse_ntasks(stdout=stdout)
 
     return Data(timings_=timings, config=config, t=t, concVec=concVec, gradVec=gradVec, stderr=stderr, stdout=stdout, ntasks=ntasks, folder=folder)
+
+def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
+
+    data = sorted([d for d in all_data if "coarser" in d.mesh and np.isclose(d.dt, 0.001) and d.ntasks == 1], key=lambda x: x.num_refinements)
+    
+    keys = ['Initialize Model',
+            "SNES Assemble Jacobian Nested Matrix",
+            'SNES Assemble Residual Nest Vector',
+            "[MixedAssembler] Assemble cells",
+            # "dendritic-spine-example"
+            ]
+    
+    names = data[0].timings["name"].values.tolist()
+
+    # Create bar plot
+    fig, ax = plt.subplots()
+    indices = []
+    for name in keys:
+        indices.append(names.index(name))
+    indices = np.array(indices)
+    x = np.arange(0, 3)
+    width = 0.5
+    bottom = np.zeros_like(x)
+    breakpoint()
+    for index, key in zip(indices, keys):
+        y = np.zeros_like(x)
+        for i, d in enumerate(data):
+            y[i] = float(d.timings["wall tot"].values[index])
+   
+        # y = d.timings["wall tot"].values[indices].astype(float)
+        # breakpoint()
+        print(key, y, bottom)
+        ax.bar(x, y, width=width, label=key, bottom=bottom)
+        bottom += y
+    ax.set_xticks(x)
+    # ax.
+    # ax.set_xticklabels(keys, rotation=45)
+    ax.legend()
+    # ax.set_ylim(0, 5e5)
+    # ax.set_yscale("log")
+    # fig.tight_layout()
+    fig.savefig((output_folder / "timings_profile.png").with_suffix(f".{format}"))
+    # breakpoint()
     
 def main(results_folder: Path, output_folder: Path, 
          format: str = "png",
@@ -258,8 +301,9 @@ def main(results_folder: Path, output_folder: Path,
             json.dumps([r.to_json() for r in all_results], indent=4)
         )
 
-    plot_data(all_results, output_folder, format=format)
-    plot_refinement_study(all_results, output_folder, format=format)
+    # plot_data(all_results, output_folder, format=format)
+    # plot_refinement_study(all_results, output_folder, format=format)
+    plot_timings(all_results, output_folder, format=format)
     return 0
 
 if __name__ == "__main__":
