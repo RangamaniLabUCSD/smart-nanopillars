@@ -349,34 +349,49 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
     err_file = dolfin.XDMFFile(dolfin.MPI.comm_world, str(u_err_fname))
     err_file.parameters["flush_output"] = True
 
-    max_errs = []
-    l2_errs = []
-    l1_errs = []
-    max_errs = []
-    l2_errs = []
-    l1_errs = []
-    for u_coarsest, u_finest, t in zip(
-        coarsest_solutions, finest_solutions, coarsest_data.t
+    max_errs_file = output_folder / "max_errs.txt"
+    l2_errs_file = output_folder / "l2_errs.txt"
+    l1_errs_file = output_folder / "l1_errs.txt"
+
+    if (
+        not max_errs_file.is_file()
+        or not l2_errs_file.is_file()
+        or not l1_errs_file.is_file()
     ):
-        for j, point in enumerate(V_finest.tabulate_dof_coordinates()):
-            u_coarsest_interp.vector()[j] = u_coarsest(point)
-            u_err.vector()[j] = u_coarsest_interp.vector()[j] - u_finest.vector()[j]
+        print("Computing errors")
+        max_errs = []
+        l2_errs = []
+        l1_errs = []
+        for u_coarsest, u_finest, t in zip(
+            coarsest_solutions, finest_solutions, coarsest_data.t
+        ):
+            for j, point in enumerate(V_finest.tabulate_dof_coordinates()):
+                u_coarsest_interp.vector()[j] = u_coarsest(point)
+                u_err.vector()[j] = u_coarsest_interp.vector()[j] - u_finest.vector()[j]
 
-        err_file.write(u_err, t)
+            err_file.write(u_err, t)
 
-        max_errs.append(max(np.abs(u_err.vector()[:])))
-        l2_errs.append(
-            np.sqrt(dolfin.assemble((u_coarsest_interp - u_finest) ** 2 * dx_finest))
-        )
-        l1_errs.append(
-            dolfin.assemble(ufl.algebra.Abs(u_coarsest_interp - u_finest) * dx_finest)
-        )
-        print(f"Processed error data {i+1} of {len(coarsest_data.t)}")
+            max_errs.append(max(np.abs(u_err.vector()[:])))
+            l2_errs.append(
+                np.sqrt(
+                    dolfin.assemble((u_coarsest_interp - u_finest) ** 2 * dx_finest)
+                )
+            )
+            l1_errs.append(
+                dolfin.assemble(
+                    ufl.algebra.Abs(u_coarsest_interp - u_finest) * dx_finest
+                )
+            )
+            print(f"Processed error data {i+1} of {len(coarsest_data.t)}")
 
-    # Save as text files
-    np.savetxt((output_folder / "max_errs.txt"), max_errs)
-    np.savetxt((output_folder / "l2_errs.txt"), l2_errs)
-    np.savetxt((output_folder / "l1_errs.txt"), l1_errs)
+        # Save as text files
+        np.savetxt((output_folder / "max_errs.txt"), max_errs)
+        np.savetxt((output_folder / "l2_errs.txt"), l2_errs)
+        np.savetxt((output_folder / "l1_errs.txt"), l1_errs)
+
+    max_errs = np.loadtxt(max_errs_file)
+    l2_errs = np.loadtxt(l2_errs_file)
+    l1_errs = np.loadtxt(l1_errs_file)
 
     # Plot errors in three subplots
     fig, ax = plt.subplots(3, 1, figsize=(8, 12))

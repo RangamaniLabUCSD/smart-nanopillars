@@ -121,8 +121,6 @@ def load_solution(mesh_file="", results_file="", idx=0, name="Ca"):
                 dvec.vector().apply("insert")
                 yield dvec
 
-    raise StopIteration
-
 
 def analyze_all(
     mesh_file="",
