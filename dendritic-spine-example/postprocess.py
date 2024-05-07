@@ -103,6 +103,7 @@ def load_all_data(main_path: Path):
         all_data.append(data)
     return all_data
 
+
 def plot_data(all_data: list[Data], output_folder, format: str = "png"):
     data = [d for d in all_data if d.ntasks == 1]
     fig, ax = plt.subplots(2, 4, sharex=True, sharey="row", figsize=(15, 8))
@@ -113,7 +114,7 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
         "1spine_mesh_coarser_refined_2": 2,
         "1spine_mesh": 3,
     }
-    
+
     dts = list(sorted({d.dt for d in data}))
     dts2color = {d: c for d, c in zip(dts, cycle(plt.cm.tab10.colors))}
 
@@ -280,75 +281,117 @@ def load_data(folder: Path = Path("82094")) -> Data:
 
 
 def plot_linf_error(all_data: list[Data], output_folder, format: str = "png"):
-    data = sorted(all_data, key=lambda x: x.num_refinements)
     here = Path(__file__).parent
     import dolfin
+    import sys
 
-    from load_model import load_model
+    sys.path.append((here / ".." / "utils").as_posix())
 
-    coarsest_data = data[0]
-    finest_data = data[1]
+    import smart_analysis
 
-    model_coarse = load_model(
-        mesh_file=str(
-            here
-            / ".."
-            / "scripts"
-            / "meshes-dendritic-spine"
-            / f"{coarsest_data.mesh}.h5"
-        ),
+    try:
+        import ufl_legacy as ufl
+    except ImportError:
+        import ufl
+
+    # find data indices associated with coarsest and finest meshes (with min dt)
+    num_refinements = []
+    dt = []
+    for i in range(len(all_data)):
+        num_refinements.append(all_data[i].num_refinements)
+        dt.append(all_data[i].dt)
+    finest_logic = np.logical_and(
+        np.array(dt) == min(dt), np.array(num_refinements) == max(num_refinements)
     )
-
-    model_finest = load_model(
-        mesh_file=str(
-            here
-            / ".."
-            / "scripts"
-            / "meshes-dendritic-spine"
-            / f"{finest_data.mesh}.h5"
-        ),
+    finest_idx = np.nonzero(finest_logic)[0]
+    if len(finest_idx) != 1:
+        raise ValueError("Could not find the finest mesh case")
+    else:
+        finest_idx = finest_idx[0]
+    coarsest_logic = np.logical_and(
+        np.array(dt) == min(dt), np.array(num_refinements) == min(num_refinements)
     )
+    coarsest_idx = np.nonzero(coarsest_logic)[0]
+    if len(coarsest_idx) != 1:
+        raise ValueError("Could not find the coarsest mesh case")
+    else:
+        coarsest_idx = coarsest_idx[0]
+    coarsest_data = all_data[coarsest_idx]
+    finest_data = all_data[finest_idx]
 
-    V_coarsest = model_coarse.sc["Ca"].u["u"].function_space().collapse()
-    V_finest = model_finest.sc["Ca"].u["u"].function_space().collapse()
-
+    # pull out mesh files from data structure
+    mesh_file_coarsest = str(
+        here / ".." / "scripts" / "meshes-dendritic-spine" / f"{coarsest_data.mesh}.h5"
+    )
+    mesh_file_finest = str(
+        here / ".." / "scripts" / "meshes-dendritic-spine" / f"{finest_data.mesh}.h5"
+    )
     # Load solutions
-    u_coarsest = dolfin.Function(V_coarsest)
-    u_finest = dolfin.Function(V_finest)
-    u_err = dolfin.Function(V_coarsest)
-    dm = dolfin.dof_to_vertex_map(V_coarsest)
-    i = 0
-    errs = np.zeros(V_coarsest.dim())
+    coarsest_solutions = smart_analysis.load_solution(
+        mesh_file_coarsest, coarsest_data.folder / "Ca.h5", 0
+    )
+
+    finest_solutions = smart_analysis.load_solution(
+        mesh_file_finest, finest_data.folder / "Ca.h5", 0
+    )
+
+    u_coarsest = next(iter(coarsest_solutions))
+    u_finest = next(iter(finest_solutions))
+
+    V_finest = u_finest.function_space()
+    u_coarsest_interp = dolfin.Function(V_finest)
+    u_err = dolfin.Function(V_finest)
+    dx_finest = dolfin.Measure("dx", V_finest.mesh())
 
     u_err_fname = output_folder / "u_err.xdmf"
     u_err_fname.unlink(missing_ok=True)
     u_err_fname.with_suffix(".h5").unlink(missing_ok=True)
+    err_file = dolfin.XDMFFile(dolfin.MPI.comm_world, str(u_err_fname))
+    err_file.parameters["flush_output"] = True
 
-    max_errs = []
-    l2_errs = []
-    l1_errs = []
-    for i, t in enumerate(coarsest_data.t):
-        with dolfin.XDMFFile((coarsest_data.folder / "Ca.xdmf").as_posix()) as f:
-            f.read_checkpoint(u_coarsest, "Ca", i)
-        with dolfin.XDMFFile((finest_data.folder / "Ca.xdmf").as_posix()) as f:
-            f.read_checkpoint(u_finest, "Ca", i)
+    max_errs_file = output_folder / "max_errs.txt"
+    l2_errs_file = output_folder / "l2_errs.txt"
+    l1_errs_file = output_folder / "l1_errs.txt"
 
-        for j, point in enumerate(V_coarsest.mesh().coordinates()):
-            errs[j] = u_coarsest(point) - u_finest(point)
+    if (
+        not max_errs_file.is_file()
+        or not l2_errs_file.is_file()
+        or not l1_errs_file.is_file()
+    ):
+        print("Computing errors")
+        max_errs = []
+        l2_errs = []
+        l1_errs = []
+        for u_coarsest, u_finest, t in zip(
+            coarsest_solutions, finest_solutions, coarsest_data.t
+        ):
+            for j, point in enumerate(V_finest.tabulate_dof_coordinates()):
+                u_coarsest_interp.vector()[j] = u_coarsest(point)
+                u_err.vector()[j] = u_coarsest_interp.vector()[j] - u_finest.vector()[j]
 
-        u_err.vector()[:] = errs[dm]
-        with dolfin.XDMFFile(u_err_fname.as_posix()) as f:
-            f.write_checkpoint(u_err, "u_err", t, dolfin.XDMFFile.Encoding.HDF5, True)
+            err_file.write(u_err, t)
 
-        i += 1
-        max_errs.append(np.linalg.norm(errs, ord=np.inf))
-        l2_errs.append(np.linalg.norm(errs))
-        l1_errs.append(np.linalg.norm(errs, ord=1))
+            max_errs.append(max(np.abs(u_err.vector()[:])))
+            l2_errs.append(
+                np.sqrt(
+                    dolfin.assemble((u_coarsest_interp - u_finest) ** 2 * dx_finest)
+                )
+            )
+            l1_errs.append(
+                dolfin.assemble(
+                    ufl.algebra.Abs(u_coarsest_interp - u_finest) * dx_finest
+                )
+            )
+            print(f"Processed error data {i+1} of {len(coarsest_data.t)}")
 
-    # Save as text files
-    np.savetxt((output_folder / "max_errs.txt"), max_errs)
-    np.savetxt((output_folder / "l2_errs.txt"), l2_errs)
-    np.savetxt((output_folder / "l1_errs.txt"), l1_errs)
+        # Save as text files
+        np.savetxt((output_folder / "max_errs.txt"), max_errs)
+        np.savetxt((output_folder / "l2_errs.txt"), l2_errs)
+        np.savetxt((output_folder / "l1_errs.txt"), l1_errs)
+
+    max_errs = np.loadtxt(max_errs_file)
+    l2_errs = np.loadtxt(l2_errs_file)
+    l1_errs = np.loadtxt(l1_errs_file)
 
     # Plot errors in three subplots
     fig, ax = plt.subplots(3, 1, figsize=(8, 12))
