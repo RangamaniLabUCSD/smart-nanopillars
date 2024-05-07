@@ -141,10 +141,13 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
     ax[1].plot(t_ode, ode_results[:,ode_fac_idx], linestyle='dashed', label=f"ODE solution")
     
     ax[0].set_ylabel("YAP/TAZ")
+    ax[0].set_xlim([0, 3600])
     ax[1].set_ylabel("F-Actin")
     ax[1].set_xlabel("Time")
-    lgd = fig.legend(lines, labels, title="Refinement", loc="center right", bbox_to_anchor=(1.1, 0.5))
-    fig.subplots_adjust(right=0.9)
+    ax[1].set_xlim([0, 2000])
+    lgd = fig.legend()
+    # lgd = fig.legend(lines, labels, title="Refinement", loc="center right", bbox_to_anchor=(1.1, 0.5))
+    # fig.subplots_adjust(right=0.9)
     fig.savefig((output_folder / "results.png").with_suffix(f".{format}"), bbox_extra_artists=(lgd,), bbox_inches="tight")
     
     fig_t, ax_t = plt.subplots()    
