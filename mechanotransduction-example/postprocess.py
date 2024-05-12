@@ -123,7 +123,7 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
     # Eval vs Cutoff
     x = np.arange(len(refinements))
 
-    fig, ax = plt.subplots(2, 1, sharex=True)
+    fig, ax = plt.subplots(2, 1, sharex=True, figsize=(4,6))
     lines = []
     labels = []
     timings = []
@@ -140,10 +140,10 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
     ax[0].plot(t_ode, ode_results[:,ode_yap_idx], linestyle='dashed', label=f"ODE solution")
     ax[1].plot(t_ode, ode_results[:,ode_fac_idx], linestyle='dashed', label=f"ODE solution")
     
-    ax[0].set_ylabel("YAP/TAZ")
+    ax[0].set_ylabel("YAP/TAZ (μM)")
     ax[0].set_xlim([0, 3600])
-    ax[1].set_ylabel("F-Actin")
-    ax[1].set_xlabel("Time")
+    ax[1].set_ylabel("F-Actin (μM)")
+    ax[1].set_xlabel("Time (s)")
     ax[1].set_xlim([0, 2000])
     lgd = fig.legend()
     # lgd = fig.legend(lines, labels, title="Refinement", loc="center right", bbox_to_anchor=(1.1, 0.5))
@@ -159,6 +159,26 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
     ax_t.set_ylabel("Total run time [s]")
     ax_t.set_title("Total run time vs refinement")
     fig_t.savefig((output_folder / "timings.png").with_suffix(f".{format}"))
+
+    fig_err_yap = plt.figure(figsize=(3,2))
+    for d in sorted(data, key=lambda x: x.refinement):
+        ode_interp = np.interp(d.t, t_ode, ode_results[:,ode_yap_idx])
+        percent_err = 100*(ode_interp-d.yap)/ode_interp
+        plt.plot(d.t, percent_err, label=f"refinement = {d.refinement}")
+    plt.xlim([0, 2000])
+    plt.xlabel("Time (s)")
+    plt.ylabel("YAP/TAZ percent error")
+    fig_err_yap.savefig((output_folder / "err_yap.png").with_suffix(f".{format}"))
+
+    fig_err_fac = plt.figure(figsize=(3,2))
+    for d in sorted(data, key=lambda x: x.refinement):
+        ode_interp = np.interp(d.t, t_ode, ode_results[:,ode_fac_idx])
+        percent_err = 100*(ode_interp-d.fac)/ode_interp
+        plt.plot(d.t, percent_err, label=f"refinement = {d.refinement}")
+    plt.xlim([0, 2000])
+    plt.xlabel("Time (s)")
+    plt.ylabel("F-actin percent error")
+    fig_err_fac.savefig((output_folder / "err_fac.png").with_suffix(f".{format}"))
         
 def load_timings(folder: Path) -> dict[str, Any]:
     timings = (folder / "timings.txt").read_text()

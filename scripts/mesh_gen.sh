@@ -9,7 +9,7 @@
 
 # # echo "Saving mesh for cru example..."
 # python3 main.py cru-preprocess --input-mesh-file /root/shared/gitrepos/smart-comp-sci/meshes/CRU_mesh.xml \
-# --output-mesh-file /root/scratch/write-meshes/cru/meshes/mito_mesh.h5
+# --output-mesh-file /root/scratch/write-meshes/cru/meshes/cru_mesh.h5
 
 echo "Saving meshes for mechanotransduction example"
 # Create meshes with symm considerations

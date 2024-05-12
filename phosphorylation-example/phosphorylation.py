@@ -76,7 +76,7 @@ if not pathlib.Path.exists(args["mesh_folder"]):
         mesh_folder = args["mesh_folder"],
         curRadius = 1.0,
         hEdge = 0.2,
-        num_refinements = 0,
+        num_refinements = 2,
         axisymmetric = False,
         rect = args["rect"],
         dry_run = False)

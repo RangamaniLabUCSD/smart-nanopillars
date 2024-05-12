@@ -112,7 +112,7 @@ def create_3dcell(
     gmsh.model.add("3dcell")
     # first add outer body and revolve
     if thetaExpr != "":
-        num_theta = 11#81
+        num_theta = 81
         if "rect" in thetaExpr:
             try:
                 AR = float(thetaExpr[4:])
