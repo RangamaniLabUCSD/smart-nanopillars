@@ -151,8 +151,6 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
             labels.append(f"{d.dt:.2e}")
         ax[1, index].plot(d.t, d.gradVec, label=d.dt, color=dts2color[d.dt])
 
-        print(d.mesh, d.dt, d.num_refinements, d.folder.stem)
-
     for k, v in mesh2index.items():
         ax[0, v].set_title(" ".join(k.split("_")))
 
@@ -490,6 +488,234 @@ def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
         bbox_extra_artists=(lgd,),
         bbox_inches="tight",
     )
+    )
+
+
+def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", subdomains=[]):
+    here = Path(__file__).parent
+    import dolfin
+    import sys
+
+    sys.path.append((here / ".." / "utils").as_posix())
+
+    import smart_analysis
+
+    try:
+        import ufl_legacy as ufl
+    except ImportError:
+        import ufl
+
+    # find data indices associated with coarsest and finest meshes (with min dt)
+    num_refinements = []
+    dt = []
+    for i in range(len(all_data)):
+        num_refinements.append(all_data[i].num_refinements)
+        dt.append(all_data[i].dt)
+    finest_logic = np.logical_and(
+        np.array(dt) == min(dt), np.array(num_refinements) == max(num_refinements)
+    )
+    finest_idx = np.nonzero(finest_logic)[0]
+    if len(finest_idx) != 1:
+        raise ValueError("Could not find the finest mesh case")
+    else:
+        finest_idx = finest_idx[0]
+    coarsest_logic = np.logical_and(
+        np.array(dt) == min(dt), np.array(num_refinements) == min(num_refinements)
+    )
+    coarsest_idx = np.nonzero(coarsest_logic)[0]
+    if len(coarsest_idx) != 1:
+        raise ValueError("Could not find the coarsest mesh case")
+    else:
+        coarsest_idx = coarsest_idx[0]
+    coarsest_data = all_data[coarsest_idx]
+    finest_data = all_data[finest_idx]
+    max_errs_file = output_folder / "max_errs.txt"
+    l2_errs_file = output_folder / "l2_errs.txt"
+    l1_errs_file = output_folder / "l1_errs.txt"
+    avg_coarsest_file = output_folder / "avg_coarsest.txt"
+    avg_finest_file = output_folder / "avg_finest.txt"
+
+    if (
+            not max_errs_file.is_file()
+            or not l2_errs_file.is_file()
+            or not l1_errs_file.is_file()
+            or not avg_coarsest_file.is_file()
+            or not avg_finest_file.is_file()
+        ):
+        # pull out mesh files from data structure
+        mesh_file_coarsest = str(
+            here / ".." / "scripts" / "meshes-dendritic-spine" / f"{coarsest_data.mesh}.h5"
+        )
+        mesh_file_finest = str(
+            here / ".." / "scripts" / "meshes-dendritic-spine" / f"{finest_data.mesh}.h5"
+        )
+        # Load solutions
+        coarsest_solutions = smart_analysis.load_solution(
+            mesh_file_coarsest, coarsest_data.folder / "Ca.h5", 0
+        )
+
+        finest_solutions = smart_analysis.load_solution(
+            mesh_file_finest, finest_data.folder / "Ca.h5", 0
+        )
+
+        u_coarsest = next(iter(coarsest_solutions))
+        u_finest = next(iter(finest_solutions))
+
+        V_coarsest = u_coarsest.function_space()
+        V_finest = u_finest.function_space()
+        u_coarsest_interp = dolfin.Function(V_finest)
+        u_err = dolfin.Function(V_finest)
+
+        if len(subdomains) > 0:
+            coarsest_mf = dolfin.MeshFunction(
+                    "size_t", V_coarsest.mesh(), V_coarsest.mesh().topology().dim(), 0)
+            finest_mf = dolfin.MeshFunction(
+                    "size_t", V_finest.mesh(), V_finest.mesh().topology().dim(), 0)
+            for k, subdomain in enumerate(subdomains):
+                if len(subdomain) == 6:
+                    meshes = [V_coarsest.mesh(), V_finest.mesh()]
+                    mfs = [coarsest_mf, finest_mf]
+                    for j in range(len(meshes)):
+                        mesh = meshes[j]
+                        mf = mfs[j]
+                        # then defines a box to specify region of integration [x0, y0, z0, x1, y1, z1]
+                        for c in dolfin.cells(mesh):
+                            xCur = c.midpoint().x()
+                            yCur = c.midpoint().y()
+                            zCur = c.midpoint().z()
+                            if (
+                                xCur > subdomain[0]
+                                and xCur < subdomain[3]
+                                and yCur > subdomain[1]
+                                and yCur < subdomain[4]
+                                and zCur > subdomain[2]
+                                and zCur < subdomain[5]
+                            ):
+                                mf[c] = k+1
+            dx_coarsest = dolfin.Measure("dx", V_coarsest.mesh(),subdomain_data=coarsest_mf)
+            dx_finest = dolfin.Measure("dx", V_finest.mesh(),subdomain_data=finest_mf)
+            vol_coarsest = [dolfin.assemble(1.0*dx_coarsest)]
+            vol_finest = [dolfin.assemble(1.0*dx_finest)]
+            for k in range(len(subdomains)):
+                vol_coarsest.append(dolfin.assemble(1.0*dx_coarsest(k+1)))
+                vol_finest.append(dolfin.assemble(1.0*dx_finest(k+1)))
+        else:
+            dx_coarsest = dolfin.Measure("dx", V_coarsest.mesh())
+            vol_coarsest = [dolfin.assemble(1.0*dx_coarsest)]
+            dx_finest = dolfin.Measure("dx", V_finest.mesh())
+            vol_finest = [dolfin.assemble(1.0*dx_finest)]
+
+        u_err_fname = output_folder / "u_err.xdmf"
+        u_err_fname.unlink(missing_ok=True)
+        u_err_fname.with_suffix(".h5").unlink(missing_ok=True)
+        err_file = dolfin.XDMFFile(dolfin.MPI.comm_world, str(u_err_fname))
+        err_file.parameters["flush_output"] = True
+
+        avg_coarsest = np.zeros([len(coarsest_data.t),len(subdomains)+1])
+        avg_finest = np.zeros([len(finest_data.t),len(subdomains)+1])
+        avg_coarsest[0][0] = dolfin.assemble(u_coarsest*dx_coarsest)/vol_coarsest[0]
+        avg_finest[0][0] = dolfin.assemble(u_finest*dx_finest)/vol_finest[0]
+        for k in range(len(subdomains)):
+            avg_coarsest[0][k+1] = dolfin.assemble(u_coarsest*dx_coarsest(k+1))/vol_coarsest[k+1]
+            avg_finest[0][k+1] = dolfin.assemble(u_finest*dx_finest(k+1))/vol_finest[k+1]
+
+        print("Computing errors")
+        max_errs = [0.0]
+        l2_errs = [0.0]
+        l1_errs = [0.0]
+        i=1
+        for u_coarsest, u_finest, t in zip(
+            coarsest_solutions, finest_solutions, coarsest_data.t
+        ):
+            avg_coarsest[i][0] = dolfin.assemble(u_coarsest*dx_coarsest)/vol_coarsest[0]
+            avg_finest[i][0] = dolfin.assemble(u_finest*dx_finest)/vol_finest[0]
+            for k in range(len(subdomains)):
+                avg_coarsest[i][k+1] = dolfin.assemble(u_coarsest*dx_coarsest(k+1))/vol_coarsest[k+1]
+                avg_finest[i][k+1] = dolfin.assemble(u_finest*dx_finest(k+1))/vol_finest[k+1]
+
+            for j, point in enumerate(V_finest.tabulate_dof_coordinates()):
+                u_coarsest_interp.vector()[j] = u_coarsest(point)
+                u_err.vector()[j] = u_coarsest_interp.vector()[j] - u_finest.vector()[j]
+
+            err_file.write(u_err, t)
+
+            max_errs.append(max(np.abs(u_err.vector()[:])))
+            l2_errs.append(
+                np.sqrt(
+                    dolfin.assemble((u_coarsest_interp - u_finest) ** 2 * dx_finest)
+                )
+            )
+            l1_errs.append(
+                dolfin.assemble(
+                    ufl.algebra.Abs(u_coarsest_interp - u_finest) * dx_finest
+                )
+            )
+            print(f"Processed error data {i+1} of {len(coarsest_data.t)}")
+            i+=1
+
+        # Save as text files
+        np.savetxt(max_errs_file, max_errs)
+        np.savetxt(l2_errs_file, l2_errs)
+        np.savetxt(l1_errs_file, l1_errs)
+        np.savetxt(avg_coarsest_file, avg_coarsest)
+        np.savetxt(avg_finest_file, avg_finest)
+
+    max_errs = np.loadtxt(max_errs_file)
+    l2_errs = np.loadtxt(l2_errs_file)
+    l1_errs = np.loadtxt(l1_errs_file)
+    avg_coarsest = np.loadtxt(avg_coarsest_file)
+    avg_finest = np.loadtxt(avg_finest_file)
+
+    # Plot errors in three subplots
+    fig, ax = plt.subplots(3, 1)#, figsize=(8, 12))
+    ax[0].plot(max_errs)
+    ax[0].set_title("Max error")
+    ax[1].plot(l2_errs)
+    ax[1].set_title("L2 error")
+    ax[2].plot(l1_errs)
+    ax[2].set_title("L1 error")
+    fig.savefig((output_folder / "errors.png").with_suffix(f".{format}"))
+
+    # Plot calcium conc avg differences
+    if len(subdomains) > 0:
+        cases = []
+        coarse_maxes = []
+        fine_maxes = []
+        coarse_avgs = []
+        fine_avgs = []
+        for i in range(len(subdomains)):
+            cases.append(f"Region{i}")
+            coarse_maxes.append(max(avg_coarsest[:,i+1]))
+            fine_maxes.append(max(avg_finest[:,i+1]))
+            coarse_avgs.append(np.trapz(avg_coarsest[:,i+1], coarsest_data.t)/np.ptp(coarsest_data.t))
+            fine_avgs.append(np.trapz(avg_finest[:,i+1], finest_data.t)/np.ptp(finest_data.t))
+        cases = tuple(cases)
+        maxes = {"coarse": tuple(coarse_maxes), "fine": tuple(fine_maxes)}
+        avgs = {"coarse": tuple(coarse_avgs), "fine": tuple(fine_avgs)}
+
+        x = np.arange(len(cases))  # the label locations
+        width = 0.25  # the width of the bars
+
+        fig, ax = plt.subplots(2, 1, figsize=(4,6))
+        multiplier = 0
+        for attribute, measurement in maxes.items():
+            offset = width * multiplier
+            ax[0].bar(x + offset, measurement, width, label=attribute)
+            multiplier += 1
+        # Add some text for labels, title and custom x-axis tick labels, etc.
+        ax[0].set_ylabel('Max calcium (μM)')
+        ax[0].set_xticks(x + width/2, cases)
+        ax[0].legend()
+
+        multiplier = 0
+        for attribute, measurement in avgs.items():
+            offset = width * multiplier
+            ax[1].bar(x + offset, measurement, width, label=attribute)
+            multiplier += 1
+        # Add some text for labels, title and custom x-axis tick labels, etc.
+        ax[1].set_ylabel('Avg calcium (μM)')
+        ax[1].set_xticks(x + width/2, cases)
+        fig.savefig((output_folder / "summary_ca_error.png").with_suffix(f".{format}"))
 
 
 def main(
@@ -518,6 +744,7 @@ def main(
     plot_data(all_results, output_folder, format=format)
     plot_refinement_study(all_results, output_folder, format=format)
     plot_timings(all_results, output_folder, format=format)
+    plot_linf_error(all_results, output_folder, format=format)
     return 0
 
 
