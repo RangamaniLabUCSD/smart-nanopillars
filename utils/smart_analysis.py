@@ -157,7 +157,7 @@ def analyze_all(
     comm = d.MPI.comm_world
     dmesh = d.Mesh(comm)
     hdf5 = d.HDF5File(comm, str(mesh_file), "r")
-    hdf5.read(dmesh, "/mesh")
+    hdf5.read(dmesh, "/mesh", False)
     dim = dmesh.topology().dim()
 
     mf_cell = d.MeshFunction("size_t", dmesh, dim, value=0)
@@ -251,8 +251,7 @@ def analyze_all(
         dx_cur = d.Measure("dx", domain=cur_mesh, subdomain_data=subdomain_mf)
         Vcur = d.FunctionSpace(cur_mesh, "P", 1)
         dvec = d.Function(Vcur)
-        time_pt_tags = cur_file["VisualisationVector"].keys()
-        num_time_points = len(time_pt_tags)
+        num_time_points = len(tVec)
         dof_map = d.dof_to_vertex_map(Vcur)[:]
         if axisymm:
             x_cur = d.SpatialCoordinate(cur_mesh)[0]

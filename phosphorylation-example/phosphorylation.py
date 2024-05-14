@@ -65,6 +65,23 @@ add_phosphorylation_arguments(parser)
 args = vars(parser.parse_args())
 timer = d.Timer("phosphorylation-example")
 
+if not pathlib.Path.exists(args["mesh_folder"]):
+    args["rect"] = True
+    here = pathlib.Path(__file__).parent
+    import sys
+    sys.path.insert(0, (here / ".." / "scripts").as_posix())
+    import runner as main_run
+    args["mesh_folder"] = here / "mesh"
+    main_run.preprocess_phosphorylation_mesh(
+        mesh_folder = args["mesh_folder"],
+        curRadius = 1.0,
+        hEdge = 0.2,
+        num_refinements = 2,
+        axisymmetric = False,
+        rect = args["rect"],
+        dry_run = False)
+    args["outdir"] = here / "results"
+
 # Futhermore, you could also save the logs to a file by attaching a file handler to the logger as follows.
 #
 # ```
