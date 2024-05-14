@@ -3,7 +3,8 @@ import argparse
 from pathlib import Path
 import pandas as pd
 import json
-from typing import NamedTuple, Any
+from dataclasses import dataclass
+from typing import Any
 from itertools import cycle
 import numpy as np
 import re
@@ -15,7 +16,8 @@ import dendritic_spine_args
 ntasks_pattern = re.compile("ntasks: (?P<n>\d+)")
 
 
-class Data(NamedTuple):
+@dataclass
+class Data:
     timings_: list[dict[str, Any]]
     petsc_timings_: list[dict[str, Any]]
     config: dict[str, Any]
@@ -37,7 +39,19 @@ class Data(NamedTuple):
 
     @property
     def timings(self):
-        return pd.DataFrame(self.timings_)
+        if not hasattr(self, "_timings"):
+            self._timings = pd.DataFrame(self.timings_)
+            # Now update all dtypes
+            self._timings["reps"] = self._timings["reps"].astype(int)
+            self._timings["wall avg"] = self._timings["wall avg"].astype(float)
+            self._timings["wall tot"] = self._timings["wall tot"].astype(float)
+            self._timings["usr avg"] = self._timings["usr avg"].astype(float)
+            self._timings["usr tot"] = self._timings["usr tot"].astype(float)
+            self._timings["sys avg"] = self._timings["sys avg"].astype(float)
+            self._timings["sys tot"] = self._timings["sys tot"].astype(float)
+            self._timings["name"] = self._timings["name"].astype(str)
+
+        return self._timings
 
     @property
     def petsc_timings(self):
@@ -136,7 +150,7 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
             lines.append(l)
             labels.append(f"{d.dt:.2e}")
         ax[1, index].plot(d.t, d.gradVec, label=d.dt, color=dts2color[d.dt])
-        # breakpoint()
+
         print(d.mesh, d.dt, d.num_refinements, d.folder.stem)
 
     for k, v in mesh2index.items():
@@ -311,106 +325,180 @@ def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
         key=lambda x: x.num_refinements,
     )
 
-    breakpoint()
-
-    keys = [
-        "SNES Assemble Jacobian Nested Matrix",
-        "SNES Assemble Residual Nest Vector",
-        "Initialize Model",
-        # "dendritic-spine-example"
+    key_list = [
+        (
+            "petsc_timings",
+            [
+                "KSPSolve",
+                "SNESLineSearch",
+                "SNESJacobianEval",
+                "SNESFunctionEval",
+            ],
+        ),
+        (
+            "timings",
+            [
+                "Solve loop [main]",
+                "Setup [main]",
+                "Initialize Model [main]",
+            ],
+        ),
+        (
+            "timings",
+            [
+                "dendritic-spine-example [main]",
+            ],
+        ),
     ]
 
-    petsc_keys = [
-        "SNESSolve",
-        "KSPSolve",
-        "SnesJacobianEval",
-        "SnesFunctionEval",
-        "PCApply",
+    data_refined0 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 0
+    ]
+    data_refined1 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 1
+    ]
+    data_refined2 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 2
     ]
 
-    names = data[0].timings["name"].values.tolist()
+    timings_refined0 = [d.timings for d in data_refined0]
+    timings_refined0_concat = pd.concat(tuple(timings_refined0))
+    timings_refined0_mean = timings_refined0_concat.groupby("name").mean()
+    timings_refined0_std = timings_refined0_concat.groupby("name").std()
+
+    petsc_timings_refined0 = [d.petsc_timings for d in data_refined0]
+    petsc_timings_refined0_concat = pd.concat(tuple(petsc_timings_refined0))
+    petsc_timings_refined0_mean = petsc_timings_refined0_concat.groupby("name").mean()
+    petsc_timings_refined0_std = petsc_timings_refined0_concat.groupby("name").std()
+
+    timings_refined1 = [d.timings for d in data_refined1]
+    timings_refined1_concat = pd.concat(tuple(timings_refined1))
+    timings_refined1_mean = timings_refined1_concat.groupby("name").mean()
+    timings_refined1_std = timings_refined1_concat.groupby("name").std()
+
+    petsc_timings_refined1 = [d.petsc_timings for d in data_refined1]
+    petsc_timings_refined1_concat = pd.concat(tuple(petsc_timings_refined1))
+    petsc_timings_refined1_mean = petsc_timings_refined1_concat.groupby("name").mean()
+    petsc_timings_refined1_std = petsc_timings_refined1_concat.groupby("name").std()
+
+    timings_refined2 = [d.timings for d in data_refined2]
+    timings_refined2_concat = pd.concat(tuple(timings_refined2))
+    timings_refined2_mean = timings_refined2_concat.groupby("name").mean()
+    timings_refined2_std = timings_refined2_concat.groupby("name").std()
+
+    petsc_timings_refined2 = [d.petsc_timings for d in data_refined2]
+    petsc_timings_refined2_concat = pd.concat(tuple(petsc_timings_refined2))
+    petsc_timings_refined2_mean = petsc_timings_refined2_concat.groupby("name").mean()
+    petsc_timings_refined2_std = petsc_timings_refined2_concat.groupby("name").std()
+
+    # petsc_names = data[0].petsc_timings["name"].values.tolist()
+    petsc_names = list(petsc_timings_refined0_mean.index)
+    names = list(timings_refined0_mean.index)
+    # names = data[0].timings["name"].values.tolist()
+    # names =
+
+    replace_dict = {
+        "SNES Assemble Jacobian Nested Matrix": "Assemble Jacobian",
+        "SNES Assemble Residual Nest Vector": "Assemble Residual",
+    }
 
     # Create bar plot
     fig, ax = plt.subplots()
-    indices = []
-    for name in keys:
-        indices.append(names.index(name))
-    indices = np.array(indices)
+    indices_list = []
+    for df_name, keys in key_list:
+        inds = []
+        for name in keys:
+            if df_name == "timings":
+                inds.append(names.index(name))
+            else:
+                inds.append(petsc_names.index(name))
+        indices_list.append(inds)
     x = np.arange(0, 3)
     width = 0.25
     bottom = np.zeros_like(x)
-    # breakpoint()
-    for index, key in zip(indices, keys):
-        y = np.zeros_like(x)
-        for i, d in enumerate(data):
-            y[i] = float(d.timings["wall tot"].values[index])
 
-        print(key, y, bottom)
-        ax.bar(x - width, y, width=width, label=key, bottom=bottom)
-        bottom += y
+    colors = plt.cm.tab10.colors
 
-    index = names.index("[MixedAssembler] Assemble cells")
-    y = [float(d.timings["wall tot"].values[index]) for d in data]
-    ax.bar(x, y, width=width, label="Assemble cells")
+    lines = []
+    labels = []
+    i = 0
+    y_line_search = np.zeros_like(x)
+    err_line_search = np.zeros_like(x)
+    for j, (indices, (df_name, keys)) in enumerate(zip(indices_list, key_list)):
+        for index, key in zip(indices, keys):
+            y = np.zeros_like(x)
+            err = np.zeros_like(x)
+            if df_name == "timings":
+                for k, (timings_mean, timings_std) in enumerate(
+                    [
+                        (timings_refined0_mean, timings_refined0_std),
+                        (timings_refined1_mean, timings_refined1_std),
+                        (timings_refined2_mean, timings_refined2_std),
+                    ]
+                ):
+                    y[k] = float(timings_mean["wall tot"].values[index])
+                    err[k] = float(timings_std["wall tot"].values[index])
+            else:
+                for k, (timings_mean, timings_std) in enumerate(
+                    [
+                        (petsc_timings_refined0_mean, petsc_timings_refined0_std),
+                        (petsc_timings_refined1_mean, petsc_timings_refined1_std),
+                        (petsc_timings_refined2_mean, petsc_timings_refined2_std),
+                    ]
+                ):
+                    y[k] = float(timings_mean["time"].values[index])
+                    err[k] = float(timings_std["time"].values[index])
 
-    index = names.index("dendritic-spine-example")
-    y = [float(d.timings["wall tot"].values[index]) for d in data]
-    ax.bar(x + width, y, width=width, label="Total run time")
+                if key == "SNESLineSearch":
+                    y_line_search[:] = y.copy()
+                    err_line_search[:] = err.copy()
+
+                if key == "SNESFunctionEval":
+                    # Line search is part of the function eval
+                    y -= y_line_search
+                    err = np.sqrt(err**2 - err_line_search**2)
+
+            print(key, y, bottom)
+            l = ax.bar(
+                x + (j - 1) * width,
+                y,
+                width=width,
+                bottom=bottom,
+                yerr=err,
+                capsize=5,
+                color=colors[i],
+            )
+            lines.append(l)
+            label = replace_dict.get(key, key).strip(" [main]")
+            labels.append(label)
+            bottom += y
+            i += 1
+        bottom[:] = 0
 
     ax.set_xticks(x)
-    ax.legend()
-    fig.savefig((output_folder / "timings_profile.png").with_suffix(f".{format}"))
 
-
-def plot_petsc_timings(all_data: list[Data], output_folder, format: str = "png"):
-    data = sorted(
-        [
-            d
-            for d in all_data
-            if "coarser" in d.mesh and np.isclose(d.dt, 0.001) and d.ntasks == 1
-        ],
-        key=lambda x: x.num_refinements,
+    # Put legend outside of the plot to the right
+    lgd = fig.legend(
+        lines,
+        labels,
+        loc="center left",
+        bbox_to_anchor=(0.9, 0.5),
+        title="Timings",
+        title_fontsize="large",
     )
+    ax.set_yscale("log")
 
-    keys = [
-        "KSPSolve",
-        "SNESJacobianEval",
-        "SNESFunctionEval",
-        "PCApply",
-    ]
-
-    names = data[0].petsc_timings["name"].values.tolist()
-
-    # Create bar plot
-    fig, ax = plt.subplots()
-    indices = []
-    for name in keys:
-        indices.append(names.index(name))
-    indices = np.array(indices)
-    x = np.arange(0, 3)
-    width = 0.25
-    bottom = np.zeros_like(x)
-    # breakpoint()
-    for index, key in zip(indices, keys):
-        y = np.zeros_like(x)
-        for i, d in enumerate(data):
-            y[i] = float(d.petsc_timings["time"].values[index])
-
-        print(key, y, bottom)
-        ax.bar(x - width / 2, y, width=width, label=key, bottom=bottom)
-        bottom += y
-
-    index = names.index("SNESSolve")
-    y = [float(d.petsc_timings["time"].values[index]) for d in data]
-    ax.bar(x + width / 2, y, width=width, label="SNESSolve")
-
-    # index = names.index("dendritic-spine-example")
-    # y = [float(d.petsc_timings["time"].values[index]) for d in data]
-    # ax.bar(x + width, y, width=width, label="Total run time")
-
-    ax.set_xticks(x)
-    ax.legend()
-    fig.savefig((output_folder / "petsc_timings_profile.png").with_suffix(f".{format}"))
+    ax.set_xlabel("Number of refinements")
+    fig.savefig(
+        (output_folder / "timings_profile.png").with_suffix(f".{format}"),
+        bbox_extra_artists=(lgd,),
+        bbox_inches="tight",
+    )
+    fig.savefig(
+        (output_folder / "timings_profile.svg").with_suffix(f".{format}"),
+        bbox_extra_artists=(lgd,),
+        bbox_inches="tight",
+    )
 
 
 def main(
@@ -438,8 +526,8 @@ def main(
 
     # plot_data(all_results, output_folder, format=format)
     # plot_refinement_study(all_results, output_folder, format=format)
-    # plot_timings(all_results, output_folder, format=format)
-    plot_petsc_timings(all_results, output_folder, format=format)
+    plot_timings(all_results, output_folder, format=format)
+    # plot_petsc_timings(all_results, output_folder, format=format)
     return 0
 
 
