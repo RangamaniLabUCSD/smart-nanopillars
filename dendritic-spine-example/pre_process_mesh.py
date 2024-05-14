@@ -5,10 +5,10 @@ import dolfin as d
 from smart import mesh_tools
 import dendritic_spine_args
 
+
 def main(input_mesh_file, output_mesh_file, num_refinements):
     if not Path(input_mesh_file).is_file():
         raise FileNotFoundError(f"File {input_mesh_file} does not exists")
-    
 
     spine_mesh = d.Mesh(Path(input_mesh_file).as_posix())
     cell_markers = d.MeshFunction("size_t", spine_mesh, 3, spine_mesh.domains())
@@ -37,7 +37,7 @@ def main(input_mesh_file, output_mesh_file, num_refinements):
             f"{spine_mesh.num_facets()} facets and "
             f"{spine_mesh.num_vertices()} vertices"
         )
-    
+
     facet_array = facet_markers.array()[:]
     for i in range(len(facet_array)):
         if (
@@ -46,7 +46,13 @@ def main(input_mesh_file, output_mesh_file, num_refinements):
             facet_array[i] = 10
 
     Path(output_mesh_file).parent.mkdir(exist_ok=True, parents=True)
-    mesh_tools.write_mesh(spine_mesh, facet_markers, cell_markers, output_mesh_file, [psd_domain, int_domain])
+    mesh_tools.write_mesh(
+        spine_mesh,
+        facet_markers,
+        cell_markers,
+        output_mesh_file,
+        [psd_domain, int_domain],
+    )
 
 
 if __name__ == "__main__":

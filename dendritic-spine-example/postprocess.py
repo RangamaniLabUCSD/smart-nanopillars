@@ -343,12 +343,6 @@ def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
                 "Initialize Model [main]",
             ],
         ),
-        (
-            "timings",
-            [
-                "dendritic-spine-example [main]",
-            ],
-        ),
     ]
 
     data_refined0 = [
@@ -391,11 +385,8 @@ def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
     petsc_timings_refined2_mean = petsc_timings_refined2_concat.groupby("name").mean()
     petsc_timings_refined2_std = petsc_timings_refined2_concat.groupby("name").std()
 
-    # petsc_names = data[0].petsc_timings["name"].values.tolist()
     petsc_names = list(petsc_timings_refined0_mean.index)
     names = list(timings_refined0_mean.index)
-    # names = data[0].timings["name"].values.tolist()
-    # names =
 
     replace_dict = {
         "SNES Assemble Jacobian Nested Matrix": "Assemble Jacobian",
@@ -414,7 +405,7 @@ def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
                 inds.append(petsc_names.index(name))
         indices_list.append(inds)
     x = np.arange(0, 3)
-    width = 0.25
+    width = 0.4
     bottom = np.zeros_like(x)
 
     colors = plt.cm.tab10.colors
@@ -460,7 +451,7 @@ def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
 
             print(key, y, bottom)
             l = ax.bar(
-                x + (j - 1) * width,
+                x + (2 * j - 1) * width / 2,
                 y,
                 width=width,
                 bottom=bottom,
@@ -524,10 +515,9 @@ def main(
             json.dumps([r.to_json() for r in all_results], indent=4)
         )
 
-    # plot_data(all_results, output_folder, format=format)
-    # plot_refinement_study(all_results, output_folder, format=format)
+    plot_data(all_results, output_folder, format=format)
+    plot_refinement_study(all_results, output_folder, format=format)
     plot_timings(all_results, output_folder, format=format)
-    # plot_petsc_timings(all_results, output_folder, format=format)
     return 0
 
 
