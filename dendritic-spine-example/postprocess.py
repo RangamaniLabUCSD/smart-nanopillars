@@ -478,6 +478,7 @@ def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
     ax.set_yscale("log")
 
     ax.set_xlabel("Number of refinements")
+    ax.set_ylabel("Time (s)")
     fig.savefig(
         (output_folder / "timings_profile.png").with_suffix(f".{format}"),
         bbox_extra_artists=(lgd,),
@@ -488,10 +489,11 @@ def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
         bbox_extra_artists=(lgd,),
         bbox_inches="tight",
     )
-    )
 
 
-def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", subdomains=[]):
+def plot_linf_error(
+    all_data: list[Data], output_folder, format: str = "png", subdomains=[]
+):
     here = Path(__file__).parent
     import dolfin
     import sys
@@ -536,18 +538,26 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
     avg_finest_file = output_folder / "avg_finest.txt"
 
     if (
-            not max_errs_file.is_file()
-            or not l2_errs_file.is_file()
-            or not l1_errs_file.is_file()
-            or not avg_coarsest_file.is_file()
-            or not avg_finest_file.is_file()
-        ):
+        not max_errs_file.is_file()
+        or not l2_errs_file.is_file()
+        or not l1_errs_file.is_file()
+        or not avg_coarsest_file.is_file()
+        or not avg_finest_file.is_file()
+    ):
         # pull out mesh files from data structure
         mesh_file_coarsest = str(
-            here / ".." / "scripts" / "meshes-dendritic-spine" / f"{coarsest_data.mesh}.h5"
+            here
+            / ".."
+            / "scripts"
+            / "meshes-dendritic-spine"
+            / f"{coarsest_data.mesh}.h5"
         )
         mesh_file_finest = str(
-            here / ".." / "scripts" / "meshes-dendritic-spine" / f"{finest_data.mesh}.h5"
+            here
+            / ".."
+            / "scripts"
+            / "meshes-dendritic-spine"
+            / f"{finest_data.mesh}.h5"
         )
         # Load solutions
         coarsest_solutions = smart_analysis.load_solution(
@@ -568,9 +578,11 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
 
         if len(subdomains) > 0:
             coarsest_mf = dolfin.MeshFunction(
-                    "size_t", V_coarsest.mesh(), V_coarsest.mesh().topology().dim(), 0)
+                "size_t", V_coarsest.mesh(), V_coarsest.mesh().topology().dim(), 0
+            )
             finest_mf = dolfin.MeshFunction(
-                    "size_t", V_finest.mesh(), V_finest.mesh().topology().dim(), 0)
+                "size_t", V_finest.mesh(), V_finest.mesh().topology().dim(), 0
+            )
             for k, subdomain in enumerate(subdomains):
                 if len(subdomain) == 6:
                     meshes = [V_coarsest.mesh(), V_finest.mesh()]
@@ -591,19 +603,21 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
                                 and zCur > subdomain[2]
                                 and zCur < subdomain[5]
                             ):
-                                mf[c] = k+1
-            dx_coarsest = dolfin.Measure("dx", V_coarsest.mesh(),subdomain_data=coarsest_mf)
-            dx_finest = dolfin.Measure("dx", V_finest.mesh(),subdomain_data=finest_mf)
-            vol_coarsest = [dolfin.assemble(1.0*dx_coarsest)]
-            vol_finest = [dolfin.assemble(1.0*dx_finest)]
+                                mf[c] = k + 1
+            dx_coarsest = dolfin.Measure(
+                "dx", V_coarsest.mesh(), subdomain_data=coarsest_mf
+            )
+            dx_finest = dolfin.Measure("dx", V_finest.mesh(), subdomain_data=finest_mf)
+            vol_coarsest = [dolfin.assemble(1.0 * dx_coarsest)]
+            vol_finest = [dolfin.assemble(1.0 * dx_finest)]
             for k in range(len(subdomains)):
-                vol_coarsest.append(dolfin.assemble(1.0*dx_coarsest(k+1)))
-                vol_finest.append(dolfin.assemble(1.0*dx_finest(k+1)))
+                vol_coarsest.append(dolfin.assemble(1.0 * dx_coarsest(k + 1)))
+                vol_finest.append(dolfin.assemble(1.0 * dx_finest(k + 1)))
         else:
             dx_coarsest = dolfin.Measure("dx", V_coarsest.mesh())
-            vol_coarsest = [dolfin.assemble(1.0*dx_coarsest)]
+            vol_coarsest = [dolfin.assemble(1.0 * dx_coarsest)]
             dx_finest = dolfin.Measure("dx", V_finest.mesh())
-            vol_finest = [dolfin.assemble(1.0*dx_finest)]
+            vol_finest = [dolfin.assemble(1.0 * dx_finest)]
 
         u_err_fname = output_folder / "u_err.xdmf"
         u_err_fname.unlink(missing_ok=True)
@@ -611,27 +625,38 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
         err_file = dolfin.XDMFFile(dolfin.MPI.comm_world, str(u_err_fname))
         err_file.parameters["flush_output"] = True
 
-        avg_coarsest = np.zeros([len(coarsest_data.t),len(subdomains)+1])
-        avg_finest = np.zeros([len(finest_data.t),len(subdomains)+1])
-        avg_coarsest[0][0] = dolfin.assemble(u_coarsest*dx_coarsest)/vol_coarsest[0]
-        avg_finest[0][0] = dolfin.assemble(u_finest*dx_finest)/vol_finest[0]
+        avg_coarsest = np.zeros([len(coarsest_data.t), len(subdomains) + 1])
+        avg_finest = np.zeros([len(finest_data.t), len(subdomains) + 1])
+        avg_coarsest[0][0] = dolfin.assemble(u_coarsest * dx_coarsest) / vol_coarsest[0]
+        avg_finest[0][0] = dolfin.assemble(u_finest * dx_finest) / vol_finest[0]
         for k in range(len(subdomains)):
-            avg_coarsest[0][k+1] = dolfin.assemble(u_coarsest*dx_coarsest(k+1))/vol_coarsest[k+1]
-            avg_finest[0][k+1] = dolfin.assemble(u_finest*dx_finest(k+1))/vol_finest[k+1]
+            avg_coarsest[0][k + 1] = (
+                dolfin.assemble(u_coarsest * dx_coarsest(k + 1)) / vol_coarsest[k + 1]
+            )
+            avg_finest[0][k + 1] = (
+                dolfin.assemble(u_finest * dx_finest(k + 1)) / vol_finest[k + 1]
+            )
 
         print("Computing errors")
         max_errs = [0.0]
         l2_errs = [0.0]
         l1_errs = [0.0]
-        i=1
+        i = 1
         for u_coarsest, u_finest, t in zip(
             coarsest_solutions, finest_solutions, coarsest_data.t
         ):
-            avg_coarsest[i][0] = dolfin.assemble(u_coarsest*dx_coarsest)/vol_coarsest[0]
-            avg_finest[i][0] = dolfin.assemble(u_finest*dx_finest)/vol_finest[0]
+            avg_coarsest[i][0] = (
+                dolfin.assemble(u_coarsest * dx_coarsest) / vol_coarsest[0]
+            )
+            avg_finest[i][0] = dolfin.assemble(u_finest * dx_finest) / vol_finest[0]
             for k in range(len(subdomains)):
-                avg_coarsest[i][k+1] = dolfin.assemble(u_coarsest*dx_coarsest(k+1))/vol_coarsest[k+1]
-                avg_finest[i][k+1] = dolfin.assemble(u_finest*dx_finest(k+1))/vol_finest[k+1]
+                avg_coarsest[i][k + 1] = (
+                    dolfin.assemble(u_coarsest * dx_coarsest(k + 1))
+                    / vol_coarsest[k + 1]
+                )
+                avg_finest[i][k + 1] = (
+                    dolfin.assemble(u_finest * dx_finest(k + 1)) / vol_finest[k + 1]
+                )
 
             for j, point in enumerate(V_finest.tabulate_dof_coordinates()):
                 u_coarsest_interp.vector()[j] = u_coarsest(point)
@@ -651,7 +676,7 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
                 )
             )
             print(f"Processed error data {i+1} of {len(coarsest_data.t)}")
-            i+=1
+            i += 1
 
         # Save as text files
         np.savetxt(max_errs_file, max_errs)
@@ -667,7 +692,7 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
     avg_finest = np.loadtxt(avg_finest_file)
 
     # Plot errors in three subplots
-    fig, ax = plt.subplots(3, 1)#, figsize=(8, 12))
+    fig, ax = plt.subplots(3, 1)  # , figsize=(8, 12))
     ax[0].plot(max_errs)
     ax[0].set_title("Max error")
     ax[1].plot(l2_errs)
@@ -685,10 +710,15 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
         fine_avgs = []
         for i in range(len(subdomains)):
             cases.append(f"Region{i}")
-            coarse_maxes.append(max(avg_coarsest[:,i+1]))
-            fine_maxes.append(max(avg_finest[:,i+1]))
-            coarse_avgs.append(np.trapz(avg_coarsest[:,i+1], coarsest_data.t)/np.ptp(coarsest_data.t))
-            fine_avgs.append(np.trapz(avg_finest[:,i+1], finest_data.t)/np.ptp(finest_data.t))
+            coarse_maxes.append(max(avg_coarsest[:, i + 1]))
+            fine_maxes.append(max(avg_finest[:, i + 1]))
+            coarse_avgs.append(
+                np.trapz(avg_coarsest[:, i + 1], coarsest_data.t)
+                / np.ptp(coarsest_data.t)
+            )
+            fine_avgs.append(
+                np.trapz(avg_finest[:, i + 1], finest_data.t) / np.ptp(finest_data.t)
+            )
         cases = tuple(cases)
         maxes = {"coarse": tuple(coarse_maxes), "fine": tuple(fine_maxes)}
         avgs = {"coarse": tuple(coarse_avgs), "fine": tuple(fine_avgs)}
@@ -696,15 +726,15 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
         x = np.arange(len(cases))  # the label locations
         width = 0.25  # the width of the bars
 
-        fig, ax = plt.subplots(2, 1, figsize=(4,6))
+        fig, ax = plt.subplots(2, 1, figsize=(4, 6))
         multiplier = 0
         for attribute, measurement in maxes.items():
             offset = width * multiplier
             ax[0].bar(x + offset, measurement, width, label=attribute)
             multiplier += 1
         # Add some text for labels, title and custom x-axis tick labels, etc.
-        ax[0].set_ylabel('Max calcium (μM)')
-        ax[0].set_xticks(x + width/2, cases)
+        ax[0].set_ylabel("Max calcium (μM)")
+        ax[0].set_xticks(x + width / 2, cases)
         ax[0].legend()
 
         multiplier = 0
@@ -713,9 +743,46 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
             ax[1].bar(x + offset, measurement, width, label=attribute)
             multiplier += 1
         # Add some text for labels, title and custom x-axis tick labels, etc.
-        ax[1].set_ylabel('Avg calcium (μM)')
-        ax[1].set_xticks(x + width/2, cases)
+        ax[1].set_ylabel("Avg calcium (μM)")
+        ax[1].set_xticks(x + width / 2, cases)
         fig.savefig((output_folder / "summary_ca_error.png").with_suffix(f".{format}"))
+
+
+def print_dofs(all_data):
+    data = sorted(
+        [
+            d
+            for d in all_data
+            if "coarser" in d.mesh and np.isclose(d.dt, 0.001) and d.ntasks == 1
+        ],
+        key=lambda x: x.num_refinements,
+    )
+    mesh_files = {
+        d.num_refinements: (Path(d.config["mesh_file"]), d.folder) for d in data
+    }
+
+    import sys
+
+    sys.path.append((Path(__file__).parent / ".." / "utils").as_posix())
+    import smart_analysis
+
+    for num_refinement, (mesh_file, results_folder) in mesh_files.items():
+        print(f"Load {num_refinement=}")
+        solution = next(
+            smart_analysis.load_solution(
+                mesh_file.as_posix(), results_folder / "Ca.h5", 0
+            )
+        )
+        hmin = solution.function_space().mesh().hmin()
+        hmax = solution.function_space().mesh().hmax()
+        num_dofs = solution.function_space().dim()
+        print(
+            f"Mesh: {mesh_file.stem}, {num_refinement=}, {num_dofs=}, {hmin=}, {hmax=}"
+        )
+
+    # print(f"Mesh: {d.mesh}")
+    # print(f"Number of dofs: {d.concVec.size}")
+    # print(f"Number of gradients: {d.gradVec.size}")
 
 
 def main(
@@ -741,10 +808,11 @@ def main(
             json.dumps([r.to_json() for r in all_results], indent=4)
         )
 
-    plot_data(all_results, output_folder, format=format)
-    plot_refinement_study(all_results, output_folder, format=format)
+    # plot_data(all_results, output_folder, format=format)
+    # plot_refinement_study(all_results, output_folder, format=format)
     plot_timings(all_results, output_folder, format=format)
-    plot_linf_error(all_results, output_folder, format=format)
+    # plot_linf_error(all_results, output_folder, format=format)
+    # print_dofs(all_results)
     return 0
 
 
