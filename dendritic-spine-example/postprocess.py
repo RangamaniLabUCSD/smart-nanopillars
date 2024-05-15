@@ -313,36 +313,152 @@ def load_data(folder: Path = Path("82094")) -> Data:
     )
 
 
-def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
-    data = sorted(
-        [
-            d
-            for d in all_data
-            if "coarser" in d.mesh and np.isclose(d.dt, 0.001) and d.ntasks == 1
-        ],
-        key=lambda x: x.num_refinements,
-    )
+# def plot_timings_stacked(all_data: list[Data], output_folder, format: str = "png"):
+#     key_list = [
+#         (
+#             "petsc_timings",
+#             [
+#                 "KSPSolve",
+#                 "SNESJacobianEval",
+#                 "SNESFunctionEval",
+#             ],
+#         ),
+#     ]
 
-    key_list = [
-        (
-            "petsc_timings",
-            [
-                "KSPSolve",
-                "SNESLineSearch",
-                "SNESJacobianEval",
-                "SNESFunctionEval",
-            ],
-        ),
-        (
-            "timings",
-            [
-                "Solve loop [main]",
-                "Setup [main]",
-                "Initialize Model [main]",
-            ],
-        ),
-    ]
+#     data_refined0 = [
+#         d for d in all_data if "coarser" in d.mesh and d.num_refinements == 0
+#     ]
+#     data_refined1 = [
+#         d for d in all_data if "coarser" in d.mesh and d.num_refinements == 1
+#     ]
+#     data_refined2 = [
+#         d for d in all_data if "coarser" in d.mesh and d.num_refinements == 2
+#     ]
 
+#     timings_refined0 = [d.timings for d in data_refined0]
+#     timings_refined0_concat = pd.concat(tuple(timings_refined0))
+#     timings_refined0_mean = timings_refined0_concat.groupby("name").mean()
+#     timings_refined0_std = timings_refined0_concat.groupby("name").std()
+
+#     petsc_timings_refined0 = [d.petsc_timings for d in data_refined0]
+#     petsc_timings_refined0_concat = pd.concat(tuple(petsc_timings_refined0))
+#     petsc_timings_refined0_mean = petsc_timings_refined0_concat.groupby("name").mean()
+#     petsc_timings_refined0_std = petsc_timings_refined0_concat.groupby("name").std()
+
+#     timings_refined1 = [d.timings for d in data_refined1]
+#     timings_refined1_concat = pd.concat(tuple(timings_refined1))
+#     timings_refined1_mean = timings_refined1_concat.groupby("name").mean()
+#     timings_refined1_std = timings_refined1_concat.groupby("name").std()
+
+#     petsc_timings_refined1 = [d.petsc_timings for d in data_refined1]
+#     petsc_timings_refined1_concat = pd.concat(tuple(petsc_timings_refined1))
+#     petsc_timings_refined1_mean = petsc_timings_refined1_concat.groupby("name").mean()
+#     petsc_timings_refined1_std = petsc_timings_refined1_concat.groupby("name").std()
+
+#     timings_refined2 = [d.timings for d in data_refined2]
+#     timings_refined2_concat = pd.concat(tuple(timings_refined2))
+#     timings_refined2_mean = timings_refined2_concat.groupby("name").mean()
+#     timings_refined2_std = timings_refined2_concat.groupby("name").std()
+
+#     petsc_timings_refined2 = [d.petsc_timings for d in data_refined2]
+#     petsc_timings_refined2_concat = pd.concat(tuple(petsc_timings_refined2))
+#     petsc_timings_refined2_mean = petsc_timings_refined2_concat.groupby("name").mean()
+#     petsc_timings_refined2_std = petsc_timings_refined2_concat.groupby("name").std()
+
+#     petsc_names = list(petsc_timings_refined0_mean.index)
+#     names = list(timings_refined0_mean.index)
+
+#     replace_dict = {
+#         "SNES Assemble Jacobian Nested Matrix": "Assemble Jacobian",
+#         "SNES Assemble Residual Nest Vector": "Assemble Residual",
+#     }
+
+#     # Create bar plot
+#     fig, ax = plt.subplots(1, 3)
+#     indices_list = []
+#     for df_name, keys in key_list:
+#         inds = []
+#         for name in keys:
+#             if df_name == "timings":
+#                 inds.append(names.index(name))
+#             else:
+#                 inds.append(petsc_names.index(name))
+#         indices_list.append(inds)
+#     x = np.arange(0, 3)
+#     width = 0.4
+#     bottom = np.zeros_like(x)
+
+#     colors = plt.cm.tab10.colors
+
+#     lines = []
+#     labels = []
+#     i = 0
+
+#     for j, (indices, (df_name, keys)) in enumerate(zip(indices_list, key_list)):
+#         for index, key in zip(indices, keys):
+#             y = np.zeros_like(x)
+#             err = np.zeros_like(x)
+#             if df_name == "timings":
+#                 for k, (timings_mean, timings_std) in enumerate(
+#                     [
+#                         (timings_refined0_mean, timings_refined0_std),
+#                         (timings_refined1_mean, timings_refined1_std),
+#                         (timings_refined2_mean, timings_refined2_std),
+#                     ]
+#                 ):
+#                     y[k] = float(timings_mean["wall tot"].values[index])
+#                     err[k] = float(timings_std["wall tot"].values[index])
+#             else:
+#                 for k, (timings_mean, timings_std) in enumerate(
+#                     [
+#                         (petsc_timings_refined0_mean, petsc_timings_refined0_std),
+#                         (petsc_timings_refined1_mean, petsc_timings_refined1_std),
+#                         (petsc_timings_refined2_mean, petsc_timings_refined2_std),
+#                     ]
+#                 ):
+#                     y[k] = float(timings_mean["time"].values[index])
+#                     err[k] = float(timings_std["time"].values[index])
+
+#             print(key, y, bottom)
+#                 l = ax[k].bar(
+#                     x + (2 * j - 1) * width / 2,
+#                     y,
+#                     width=width,
+#                     bottom=bottom,
+#                     yerr=err,
+#                     capsize=5,
+#                     color=colors[i],
+#                 )
+#             lines.append(l)
+#             label = replace_dict.get(key, key).strip(" [main]")
+#             labels.append(label)
+#             bottom += y
+#             i += 1
+#         bottom[:] = 0
+
+#     ax.set_xticks(x)
+
+#     # Put legend outside of the plot to the right
+#     lgd = fig.legend(
+#         lines,
+#         labels,
+#         loc="center left",
+#         bbox_to_anchor=(0.9, 0.5),
+#         title="Timings",
+#         title_fontsize="large",
+#     )
+#     # ax.set_yscale("log")
+
+#     ax.set_xlabel("Number of refinements")
+#     ax.set_ylabel("Time (s)")
+#     fig.savefig(
+#         (output_folder / "timings_profile_stacked.png").with_suffix(f".{format}"),
+#         bbox_extra_artists=(lgd,),
+#         bbox_inches="tight",
+#     )
+
+
+def plot_timings_stacked(all_data: list[Data], output_folder, format: str = "png"):
     data_refined0 = [
         d for d in all_data if "coarser" in d.mesh and d.num_refinements == 0
     ]
@@ -384,89 +500,265 @@ def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
     petsc_timings_refined2_std = petsc_timings_refined2_concat.groupby("name").std()
 
     petsc_names = list(petsc_timings_refined0_mean.index)
-    names = list(timings_refined0_mean.index)
-
-    replace_dict = {
-        "SNES Assemble Jacobian Nested Matrix": "Assemble Jacobian",
-        "SNES Assemble Residual Nest Vector": "Assemble Residual",
-    }
+    # names = list(timings_refined0_mean.index)
 
     # Create bar plot
     fig, ax = plt.subplots()
-    indices_list = []
-    for df_name, keys in key_list:
-        inds = []
-        for name in keys:
-            if df_name == "timings":
-                inds.append(names.index(name))
-            else:
-                inds.append(petsc_names.index(name))
-        indices_list.append(inds)
+
+    keys = [
+        "KSPSolve",
+        "SNESJacobianEval",
+        "SNESFunctionEval",
+    ]
+
+    indices = [list(petsc_names).index(key) for key in keys]
     x = np.arange(0, 3)
-    width = 0.4
+    width = 0.7
     bottom = np.zeros_like(x)
 
     colors = plt.cm.tab10.colors
 
+    total_index = timings_refined0_mean.index.tolist().index(
+        "dendritic-spine-example [main]"
+    )
+
+    total_time_mean = [
+        timings_refined0_mean["wall tot"].values[total_index],
+        timings_refined1_mean["wall tot"].values[total_index],
+        timings_refined2_mean["wall tot"].values[total_index],
+    ]
+    total_time_std = [
+        timings_refined0_std["wall tot"].values[total_index],
+        timings_refined1_std["wall tot"].values[total_index],
+        timings_refined2_std["wall tot"].values[total_index],
+    ]
+
+    assemble_time = [
+        petsc_timings_refined0_mean["time"].values[indices[1]]
+        + petsc_timings_refined0_mean["time"].values[indices[2]],
+        petsc_timings_refined1_mean["time"].values[indices[1]]
+        + petsc_timings_refined1_mean["time"].values[indices[2]],
+        petsc_timings_refined2_mean["time"].values[indices[1]]
+        + petsc_timings_refined2_mean["time"].values[indices[2]],
+    ]
+
+    ksp_time = [
+        petsc_timings_refined0_mean["time"].values[indices[0]],
+        petsc_timings_refined1_mean["time"].values[indices[0]],
+        petsc_timings_refined2_mean["time"].values[indices[0]],
+    ]
+    rest_time = [
+        total_time_mean[0] - assemble_time[0] - ksp_time[0],
+        total_time_mean[1] - assemble_time[1] - ksp_time[1],
+        total_time_mean[2] - assemble_time[2] - ksp_time[2],
+    ]
+
     lines = []
     labels = []
-    i = 0
-    y_line_search = np.zeros_like(x)
-    err_line_search = np.zeros_like(x)
-    for j, (indices, (df_name, keys)) in enumerate(zip(indices_list, key_list)):
-        for index, key in zip(indices, keys):
-            y = np.zeros_like(x)
-            err = np.zeros_like(x)
-            if df_name == "timings":
-                for k, (timings_mean, timings_std) in enumerate(
-                    [
-                        (timings_refined0_mean, timings_refined0_std),
-                        (timings_refined1_mean, timings_refined1_std),
-                        (timings_refined2_mean, timings_refined2_std),
-                    ]
-                ):
-                    y[k] = float(timings_mean["wall tot"].values[index])
-                    err[k] = float(timings_std["wall tot"].values[index])
-            else:
-                for k, (timings_mean, timings_std) in enumerate(
-                    [
-                        (petsc_timings_refined0_mean, petsc_timings_refined0_std),
-                        (petsc_timings_refined1_mean, petsc_timings_refined1_std),
-                        (petsc_timings_refined2_mean, petsc_timings_refined2_std),
-                    ]
-                ):
-                    y[k] = float(timings_mean["time"].values[index])
-                    err[k] = float(timings_std["time"].values[index])
-
-                if key == "SNESLineSearch":
-                    y_line_search[:] = y.copy()
-                    err_line_search[:] = err.copy()
-
-                if key == "SNESFunctionEval":
-                    # Line search is part of the function eval
-                    y -= y_line_search
-                    err = np.sqrt(err**2 - err_line_search**2)
-
-            print(key, y, bottom)
-            l = ax.bar(
-                x + (2 * j - 1) * width / 2,
-                y,
-                width=width,
-                bottom=bottom,
-                yerr=err,
-                capsize=5,
-                color=colors[i],
-            )
-            lines.append(l)
-            label = replace_dict.get(key, key).strip(" [main]")
-            labels.append(label)
-            bottom += y
-            i += 1
-        bottom[:] = 0
+    bottom = np.zeros(len(x))
+    # y = np.zeros_like(x)
+    for i, (label, yi) in enumerate(
+        [
+            ("Assemble", assemble_time),
+            ("KSP solve", ksp_time),
+            ("Other", rest_time),
+        ]
+    ):
+        y = np.divide(yi, total_time_mean)
+        yerr = np.divide(
+            np.sqrt(
+                np.square(np.divide(yi, total_time_mean)) * np.square(total_time_std)
+                + np.square(y) * np.square(np.divide(total_time_std, total_time_mean))
+            ),
+            total_time_mean,
+        )
+        l = ax.bar(
+            x,
+            y,
+            width=width,
+            yerr=yerr,
+            capsize=5,
+            color=colors[i],
+            bottom=bottom,
+        )
+        lines.append(l)
+        labels.append(label)
+        bottom += y
 
     ax.set_xticks(x)
+    ax.set_xticklabels(["standard", "fine", "extra fine"])
+    ax.set_yticks(np.arange(0, 1.1, 0.2))
+    ax.set_ylabel("Percentage of total time")
+    ax.set_yticklabels([f"{i:.0%}" for i in np.arange(0, 1.1, 0.2)])
+    ax.spines.top.set_visible(False)
+    ax.spines.right.set_visible(False)
+    ax.spines.bottom.set_visible(False)
+    ax.spines.left.set_visible(False)
+
+    # # Put legend outside of the plot to the right
+    fig.subplots_adjust(right=0.9)
+    lgd = fig.legend(
+        lines,
+        labels,
+        loc="center left",
+        bbox_to_anchor=(0.9, 0.5),
+        # title="Timings",
+        title_fontsize="large",
+    )
+
+    fig.savefig(
+        (output_folder / "timings_profile_stacked.png").with_suffix(f".{format}"),
+        bbox_extra_artists=(lgd,),
+        bbox_inches="tight",
+    )
+
+
+def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
+    data_refined0 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 0
+    ]
+    data_refined1 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 1
+    ]
+    data_refined2 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 2
+    ]
+
+    timings_refined0 = [d.timings for d in data_refined0]
+    timings_refined0_concat = pd.concat(tuple(timings_refined0))
+    timings_refined0_mean = timings_refined0_concat.groupby("name").mean()
+    timings_refined0_std = timings_refined0_concat.groupby("name").std()
+
+    petsc_timings_refined0 = [d.petsc_timings for d in data_refined0]
+    petsc_timings_refined0_concat = pd.concat(tuple(petsc_timings_refined0))
+    petsc_timings_refined0_mean = petsc_timings_refined0_concat.groupby("name").mean()
+    petsc_timings_refined0_std = petsc_timings_refined0_concat.groupby("name").std()
+
+    timings_refined1 = [d.timings for d in data_refined1]
+    timings_refined1_concat = pd.concat(tuple(timings_refined1))
+    timings_refined1_mean = timings_refined1_concat.groupby("name").mean()
+    timings_refined1_std = timings_refined1_concat.groupby("name").std()
+
+    petsc_timings_refined1 = [d.petsc_timings for d in data_refined1]
+    petsc_timings_refined1_concat = pd.concat(tuple(petsc_timings_refined1))
+    petsc_timings_refined1_mean = petsc_timings_refined1_concat.groupby("name").mean()
+    petsc_timings_refined1_std = petsc_timings_refined1_concat.groupby("name").std()
+
+    timings_refined2 = [d.timings for d in data_refined2]
+    timings_refined2_concat = pd.concat(tuple(timings_refined2))
+    timings_refined2_mean = timings_refined2_concat.groupby("name").mean()
+    timings_refined2_std = timings_refined2_concat.groupby("name").std()
+
+    petsc_timings_refined2 = [d.petsc_timings for d in data_refined2]
+    petsc_timings_refined2_concat = pd.concat(tuple(petsc_timings_refined2))
+    petsc_timings_refined2_mean = petsc_timings_refined2_concat.groupby("name").mean()
+    petsc_timings_refined2_std = petsc_timings_refined2_concat.groupby("name").std()
+
+    petsc_names = list(petsc_timings_refined0_mean.index)
+    # names = list(timings_refined0_mean.index)
+
+    # Create bar plot
+    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+
+    keys = [
+        "KSPSolve",
+        "SNESJacobianEval",
+        "SNESFunctionEval",
+    ]
+
+    indices = [list(petsc_names).index(key) for key in keys]
+    x = np.arange(0, 3)
+    width = 0.25
+    bottom = np.zeros_like(x)
+
+    colors = plt.cm.tab10.colors
+
+    total_index = timings_refined0_mean.index.tolist().index(
+        "dendritic-spine-example [main]"
+    )
+
+    total_time_mean = [
+        timings_refined0_mean["wall tot"].values[total_index],
+        timings_refined1_mean["wall tot"].values[total_index],
+        timings_refined2_mean["wall tot"].values[total_index],
+    ]
+    total_time_std = [
+        timings_refined0_std["wall tot"].values[total_index],
+        timings_refined1_std["wall tot"].values[total_index],
+        timings_refined2_std["wall tot"].values[total_index],
+    ]
+
+    lines = []
+    labels = []
+    for j, (index, key) in enumerate(zip(indices, keys)):
+        y = np.zeros_like(x)
+        err = np.zeros_like(x)
+
+        counts = np.zeros_like(x)
+        counts_err = np.zeros_like(x)
+        for k, (timings_mean, timings_std) in enumerate(
+            [
+                (petsc_timings_refined0_mean, petsc_timings_refined0_std),
+                (petsc_timings_refined1_mean, petsc_timings_refined1_std),
+                (petsc_timings_refined2_mean, petsc_timings_refined2_std),
+            ]
+        ):
+            y[k] = float(timings_mean["time"].values[index])
+            err[k] = float(timings_std["time"].values[index])
+
+            counts[k] = float(timings_mean["count"].values[index])
+            counts_err[k] = float(timings_std["count"].values[index])
+
+        print(key, y, bottom)
+        l = ax[0].bar(
+            x + (j - 1) * width,
+            y,
+            width=width,
+            yerr=err,
+            capsize=5,
+            color=colors[j],
+        )
+        lines.append(l)
+        labels.append(key)
+
+        ax[1].bar(
+            x + (j - 1) * width,
+            counts,
+            width=width,
+            yerr=counts_err,
+            capsize=5,
+            color=colors[j],
+        )
+
+    for axi in ax:
+        axi.set_xticks(x)
+        # axi.set_xlabel("Number of refinements")
+        axi.set_xticklabels(["standard", "fine", "extra fine"])
+
+    (l,) = ax[0].plot(
+        [-width, width],
+        [total_time_mean[0], total_time_mean[0]],
+        "-.",
+        color="k",
+    )
+    lines.append(l)
+    labels.append("Total run time (coarse)")
+    (l,) = ax[0].plot(
+        [1 - width, 1 + width],
+        [total_time_mean[1], total_time_mean[1]],
+        "--",
+        color="k",
+    )
+    lines.append(l)
+    labels.append("Total run time (fine)")
+    (l,) = ax[0].plot(
+        [2 - width, 2 + width], [total_time_mean[2], total_time_mean[2]], ":", color="k"
+    )
+    lines.append(l)
+    labels.append("Total run time (finest)")
 
     # Put legend outside of the plot to the right
+    fig.subplots_adjust(right=0.9)
     lgd = fig.legend(
         lines,
         labels,
@@ -475,19 +767,112 @@ def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
         title="Timings",
         title_fontsize="large",
     )
-    ax.set_yscale("log")
+    ax[0].set_yscale("log")
+    ax[0].set_ylabel("Time (s)")
+    ax[1].set_ylabel("Number of calls")
 
-    ax.set_xlabel("Number of refinements")
-    ax.set_ylabel("Time (s)")
     fig.savefig(
         (output_folder / "timings_profile.png").with_suffix(f".{format}"),
         bbox_extra_artists=(lgd,),
         bbox_inches="tight",
     )
+
+    num_dofs = [49194, 323328, 2299090]
+
+    x = np.array(num_dofs)
+    fig, ax = plt.subplots()
+    ax.errorbar(
+        num_dofs,
+        total_time_mean,
+        yerr=total_time_std,
+        linewidth=2,
+        fmt="o-",
+        label="Total run time",
+    )
+    ax.plot(
+        num_dofs,
+        5e-4 * x * np.log(x),
+        "--",
+        color="k",
+        linewidth=2,
+        label="$\mathcal{O}(N\mathrm{log}N)$",
+    )
+    ax.plot(num_dofs, 5e-3 * x, ":", color="k", linewidth=2, label="$\mathcal{O}(N)$")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+
+    ax.spines.right.set_visible(False)
+    ax.spines.top.set_visible(False)
+    ax.set_xlabel("Number of degrees of freedom (N)")
+    ax.set_ylabel("Total time (s)")
+    ax.legend()
     fig.savefig(
-        (output_folder / "timings_profile.svg").with_suffix(f".{format}"),
-        bbox_extra_artists=(lgd,),
+        (output_folder / "total_time_vs_dofs.png").with_suffix(f".{format}"),
         bbox_inches="tight",
+    )
+    print(np.diff(total_time_mean) / np.diff(num_dofs))
+
+    print("Percentage of total time (assembly)")
+    print(
+        (
+            "standard: ",
+            petsc_timings_refined0_mean["time"].values[indices[1]]
+            + petsc_timings_refined0_mean["time"].values[indices[2]],
+        )
+        / timings_refined0_mean["wall tot"].values[total_index]
+    )
+
+    print(
+        (
+            "fine",
+            petsc_timings_refined1_mean["time"].values[indices[1]]
+            + petsc_timings_refined1_mean["time"].values[indices[2]],
+        )
+        / timings_refined1_mean["wall tot"].values[total_index]
+    )
+
+    print(
+        (
+            "extra fine",
+            petsc_timings_refined2_mean["time"].values[indices[1]]
+            + petsc_timings_refined2_mean["time"].values[indices[2]],
+        )
+        / timings_refined2_mean["wall tot"].values[total_index]
+    )
+
+    print("Percentage of total time (KSP)")
+    print(
+        "standard",
+        petsc_timings_refined0_mean["time"].values[indices[0]]
+        / timings_refined0_mean["wall tot"].values[total_index],
+    )
+    print(
+        "fine: ",
+        petsc_timings_refined1_mean["time"].values[indices[0]]
+        / timings_refined1_mean["wall tot"].values[total_index],
+    )
+    print(
+        "extra fine: ",
+        petsc_timings_refined2_mean["time"].values[indices[0]]
+        / timings_refined2_mean["wall tot"].values[total_index],
+    )
+
+    print("Setup time")
+    index = timings_refined0_mean.index.tolist().index("Setup [main]")
+    print(
+        "standard: ",
+        timings_refined0_mean["wall tot"].values[index]
+        / timings_refined0_mean["wall tot"].values[total_index],
+    )
+    print(
+        "fine: ",
+        timings_refined1_mean["wall tot"].values[index]
+        / timings_refined1_mean["wall tot"].values[total_index],
+    )
+    print(
+        "extra fine: ",
+        timings_refined2_mean["wall tot"].values[index]
+        / timings_refined2_mean["wall tot"].values[total_index],
     )
 
 
@@ -807,10 +1192,10 @@ def main(
         results_file.write_text(
             json.dumps([r.to_json() for r in all_results], indent=4)
         )
-
     # plot_data(all_results, output_folder, format=format)
     # plot_refinement_study(all_results, output_folder, format=format)
-    plot_timings(all_results, output_folder, format=format)
+    # plot_timings(all_results, output_folder, format=format)
+    plot_timings_stacked(all_results, output_folder, format=format)
     # plot_linf_error(all_results, output_folder, format=format)
     # print_dofs(all_results)
     return 0
