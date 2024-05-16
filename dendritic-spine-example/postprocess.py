@@ -24,7 +24,7 @@ class Data(NamedTuple):
     stderr: str
     stdout: str
     ntasks: int
-    folder: Path
+    folder: Path = None
 
     @property
     def mesh(self) -> str:
@@ -131,7 +131,7 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
             labels.append(f"{d.dt:.2e}")
         ax[1, index].plot(d.t, d.gradVec, label=d.dt, color=dts2color[d.dt])
         # breakpoint()
-        print(d.mesh, d.dt, d.num_refinements, d.folder.stem)
+        print(d.mesh, d.dt, d.num_refinements)#, d.folder.stem)
 
     for k, v in mesh2index.items():
         ax[0, v].set_title(" ".join(k.split("_")))
@@ -183,35 +183,51 @@ def plot_refinement_study(all_data: list[Data], output_folder, format: str = "pn
     dts = list(sorted({d.dt for d in data}))
     num_refinements = list(sorted({d.num_refinements for d in data}))
     # Find index where we have all refinements
+    ref_data = [None] * len(num_refinements)
     for d in data:
-        print(d.dt, d.num_refinements, d.folder.stem)
+        print(d.dt, d.num_refinements)#, d.folder.stem)
+        # index = num_refinements.index(d.num_refinements)
+        # if np.isclose(d.dt, 0.00025):
+        #     ref_data[index] = [d.t, d.concVec]
 
     plotted = set()
-    fig, ax = plt.subplots(2, len(dts), sharex=True, sharey="row", figsize=(12, 8))
+    fig, ax = plt.subplots(1, len(num_refinements), sharex=True, sharey="row", figsize=(8, 3))
+    # fig_err, ax_err = plt.subplots(1, len(num_refinements), sharex=True, sharey="row", figsize=(8, 2))
     lines = []
     labels = []
     for d in data:
-        index = dts.index(d.dt)
-        key = (d.num_refinements, index)
+        # index = dts.index(d.dt)
+        index = num_refinements.index(d.num_refinements)
+        # key = (d.num_refinements, index)
+        key = (d.dt, index)
         if key in plotted:
             continue
         plotted.add(key)
-        (l,) = ax[0, index].plot(d.t, d.concVec, label=d.num_refinements)
-        ax[1, index].plot(d.t, d.gradVec, label=d.num_refinements)
-        ax[0, index].set_title(f"dt = {d.dt}")
-        if index == 3:
+        # (l,) = ax[0, index].plot(d.t, d.concVec, label=d.num_refinements)
+        (l,) = ax[index].plot(d.t, d.concVec, label=d.dt)
+        # interpCur = np.interp(ref_data[index][0], d.t, d.concVec)
+        # ax_err[index].plot(ref_data[index][0], 100*(interpCur-ref_data[index][1])/ref_data[index][1])
+        # ax[1, index].plot(d.t, d.gradVec, label=d.num_refinements)
+        # ax[0, index].set_title(f"dt = {d.dt}")
+        # if index == 3:
+        #     lines.append(l)
+        #     labels.append(d.num_refinements)
+        ax[index].set_title(f"{d.num_refinements} refinements")
+        ax[index].set_xlabel("Time (s)")
+        if index == 2:
             lines.append(l)
-            labels.append(d.num_refinements)
-    ax[0, 0].set_ylabel("Average Cytosolic calcium (μM)")
-    ax[1, 0].set_ylabel("Average Gradient of Cytosolic calcium (μM)")
-    lgd = fig.legend(
-        lines,
-        labels,
-        title="Number of refinements",
-        loc="center right",
-        bbox_to_anchor=(1.1, 0.5),
-    )
-    fig.subplots_adjust(right=0.9)
+            labels.append(d.dt)
+    ax[0].set_ylabel("Average Cytosolic calcium (μM)")
+    # ax[1, 0].set_ylabel("Average Gradient of Cytosolic calcium (μM)")
+    lgd = fig.legend(lines, labels, title="Time step (s)")
+    # lgd = fig.legend(
+    #     lines,
+    #     labels,
+    #     title="Number of refinements",
+    #     loc="center right",
+    #     bbox_to_anchor=(1.1, 0.5),
+    # )
+    # fig.subplots_adjust(right=0.9)
     fig.savefig(
         (output_folder / "refinement_study.png").with_suffix(f".{format}"),
         bbox_extra_artists=(lgd,),

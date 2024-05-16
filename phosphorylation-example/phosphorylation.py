@@ -74,9 +74,9 @@ if not pathlib.Path.exists(args["mesh_folder"]):
     args["mesh_folder"] = here / "mesh"
     main_run.preprocess_phosphorylation_mesh(
         mesh_folder = args["mesh_folder"],
-        curRadius = 1.0,
+        curRadius = 2.0,
         hEdge = 0.2,
-        num_refinements = 2,
+        num_refinements = 0,
         axisymmetric = False,
         rect = args["rect"],
         dry_run = False)
