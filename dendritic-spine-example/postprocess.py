@@ -27,7 +27,7 @@ class Data:
     stderr: str
     stdout: str
     ntasks: int
-    folder: Path
+    folder: Path = Path("")
 
     @property
     def mesh(self) -> str:
@@ -82,7 +82,7 @@ class Data:
             "stderr": self.stderr,
             "stdout": self.stdout,
             "ntasks": self.ntasks,
-            "petsc_timings": self.petsc_timings_,
+            "petsc_timings_": self.petsc_timings_,
         }
 
 
@@ -447,8 +447,8 @@ def plot_timings_stacked(all_data: list[Data], output_folder, format: str = "png
     ax.set_yticklabels([f"{i:.0%}" for i in np.arange(0, 1.1, 0.2)])
     ax.spines.top.set_visible(False)
     ax.spines.right.set_visible(False)
-    ax.spines.bottom.set_visible(False)
-    ax.spines.left.set_visible(False)
+    # ax.spines.bottom.set_visible(False)
+    # ax.spines.left.set_visible(False)
 
     # # Put legend outside of the plot to the right
     fig.subplots_adjust(right=0.9)
@@ -671,28 +671,28 @@ def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
     print(
         (
             "standard: ",
-            petsc_timings_refined0_mean["time"].values[indices[1]]
-            + petsc_timings_refined0_mean["time"].values[indices[2]],
+            (petsc_timings_refined0_mean["time"].values[indices[1]]
+            + petsc_timings_refined0_mean["time"].values[indices[2]])
+            / timings_refined0_mean["wall tot"].values[total_index],
         )
-        / timings_refined0_mean["wall tot"].values[total_index]
     )
 
     print(
         (
             "fine",
-            petsc_timings_refined1_mean["time"].values[indices[1]]
-            + petsc_timings_refined1_mean["time"].values[indices[2]],
+            (petsc_timings_refined1_mean["time"].values[indices[1]]
+            + petsc_timings_refined1_mean["time"].values[indices[2]])
+            / timings_refined1_mean["wall tot"].values[total_index],
         )
-        / timings_refined1_mean["wall tot"].values[total_index]
     )
 
     print(
         (
             "extra fine",
-            petsc_timings_refined2_mean["time"].values[indices[1]]
-            + petsc_timings_refined2_mean["time"].values[indices[2]],
+            (petsc_timings_refined2_mean["time"].values[indices[1]]
+            + petsc_timings_refined2_mean["time"].values[indices[2]])
+            / timings_refined2_mean["wall tot"].values[total_index],
         )
-        / timings_refined2_mean["wall tot"].values[total_index]
     )
 
     print("Percentage of total time (KSP)")
