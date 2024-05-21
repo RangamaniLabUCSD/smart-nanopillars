@@ -3,7 +3,8 @@ import argparse
 from pathlib import Path
 import pandas as pd
 import json
-from typing import NamedTuple, Any
+from dataclasses import dataclass
+from typing import Any
 from itertools import cycle
 import numpy as np
 import re
@@ -15,8 +16,10 @@ import dendritic_spine_args
 ntasks_pattern = re.compile("ntasks: (?P<n>\d+)")
 
 
-class Data(NamedTuple):
+@dataclass
+class Data:
     timings_: list[dict[str, Any]]
+    petsc_timings_: list[dict[str, Any]]
     config: dict[str, Any]
     t: np.ndarray
     concVec: np.ndarray
@@ -24,7 +27,7 @@ class Data(NamedTuple):
     stderr: str
     stdout: str
     ntasks: int
-    folder: Path = None
+    folder: Path = Path("")
 
     @property
     def mesh(self) -> str:
@@ -36,7 +39,23 @@ class Data(NamedTuple):
 
     @property
     def timings(self):
-        return pd.DataFrame(self.timings_)
+        if not hasattr(self, "_timings"):
+            self._timings = pd.DataFrame(self.timings_)
+            # Now update all dtypes
+            self._timings["reps"] = self._timings["reps"].astype(int)
+            self._timings["wall avg"] = self._timings["wall avg"].astype(float)
+            self._timings["wall tot"] = self._timings["wall tot"].astype(float)
+            self._timings["usr avg"] = self._timings["usr avg"].astype(float)
+            self._timings["usr tot"] = self._timings["usr tot"].astype(float)
+            self._timings["sys avg"] = self._timings["sys avg"].astype(float)
+            self._timings["sys tot"] = self._timings["sys tot"].astype(float)
+            self._timings["name"] = self._timings["name"].astype(str)
+
+        return self._timings
+
+    @property
+    def petsc_timings(self):
+        return pd.DataFrame(self.petsc_timings_)
 
     @property
     def num_refinements(self) -> int:
@@ -63,6 +82,7 @@ class Data(NamedTuple):
             "stderr": self.stderr,
             "stdout": self.stdout,
             "ntasks": self.ntasks,
+            "petsc_timings_": self.petsc_timings_,
         }
 
 
@@ -130,8 +150,6 @@ def plot_data(all_data: list[Data], output_folder, format: str = "png"):
             lines.append(l)
             labels.append(f"{d.dt:.2e}")
         ax[1, index].plot(d.t, d.gradVec, label=d.dt, color=dts2color[d.dt])
-        # breakpoint()
-        print(d.mesh, d.dt, d.num_refinements)#, d.folder.stem)
 
     for k, v in mesh2index.items():
         ax[0, v].set_title(" ".join(k.split("_")))
@@ -272,16 +290,30 @@ def load_data(folder: Path = Path("82094")) -> Data:
     concVec = np.load(folder / "concVec.npy")
     gradVec = np.load(folder / "gradVec.npy")
 
+    if (petsc_timings_file := folder / "petsc_timings.py").is_file():
+        petsc_timings_ = {}
+        exec(petsc_timings_file.read_text(), petsc_timings_)
+        stages = petsc_timings_.pop("Stages")["Main Stage"]
+        petsc_timings = []
+        for k, v in stages.items():
+            petsc_timings.append({"name": k, **v[0]})
+
+    else:
+        petsc_timings = []
+
     config = json.loads(config_file.read_text())
     timings = load_timings(folder=folder)
-    try:
-        stdout = (folder / f"{folder.name}-dendritic_spine-stdout.txt").read_text()
-        stderr = (folder / f"{folder.name}-dendritic_spine-stderr.txt").read_text()
+    if (stdout_file := folder / f"{folder.name}-dendritic_spine-stdout.txt").is_file():
+        stdout = stdout_file.read_text()
         ntasks = parse_ntasks(stdout=stdout)
-    except FileNotFoundError:
+    else:
         stdout = ""
-        stderr = ""
         ntasks = 1
+
+    if (stderr_file := folder / f"{folder.name}-dendritic_spine-stderr.txt").is_file():
+        stderr = stderr_file.read_text()
+    else:
+        stderr = ""
 
     return Data(
         timings_=timings,
@@ -293,10 +325,431 @@ def load_data(folder: Path = Path("82094")) -> Data:
         stdout=stdout,
         ntasks=ntasks,
         folder=folder,
+        petsc_timings_=petsc_timings,
     )
 
 
-def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", subdomains=[]):
+def plot_timings_stacked(all_data: list[Data], output_folder, format: str = "png"):
+    data_refined0 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 0
+    ]
+    data_refined1 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 1
+    ]
+    data_refined2 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 2
+    ]
+
+    timings_refined0 = [d.timings for d in data_refined0]
+    timings_refined0_concat = pd.concat(tuple(timings_refined0))
+    timings_refined0_mean = timings_refined0_concat.groupby("name").mean()
+    timings_refined0_std = timings_refined0_concat.groupby("name").std()
+
+    petsc_timings_refined0 = [d.petsc_timings for d in data_refined0]
+    petsc_timings_refined0_concat = pd.concat(tuple(petsc_timings_refined0))
+    petsc_timings_refined0_mean = petsc_timings_refined0_concat.groupby("name").mean()
+    petsc_timings_refined0_std = petsc_timings_refined0_concat.groupby("name").std()
+
+    timings_refined1 = [d.timings for d in data_refined1]
+    timings_refined1_concat = pd.concat(tuple(timings_refined1))
+    timings_refined1_mean = timings_refined1_concat.groupby("name").mean()
+    timings_refined1_std = timings_refined1_concat.groupby("name").std()
+
+    petsc_timings_refined1 = [d.petsc_timings for d in data_refined1]
+    petsc_timings_refined1_concat = pd.concat(tuple(petsc_timings_refined1))
+    petsc_timings_refined1_mean = petsc_timings_refined1_concat.groupby("name").mean()
+    petsc_timings_refined1_std = petsc_timings_refined1_concat.groupby("name").std()
+
+    timings_refined2 = [d.timings for d in data_refined2]
+    timings_refined2_concat = pd.concat(tuple(timings_refined2))
+    timings_refined2_mean = timings_refined2_concat.groupby("name").mean()
+    timings_refined2_std = timings_refined2_concat.groupby("name").std()
+
+    petsc_timings_refined2 = [d.petsc_timings for d in data_refined2]
+    petsc_timings_refined2_concat = pd.concat(tuple(petsc_timings_refined2))
+    petsc_timings_refined2_mean = petsc_timings_refined2_concat.groupby("name").mean()
+    petsc_timings_refined2_std = petsc_timings_refined2_concat.groupby("name").std()
+
+    petsc_names = list(petsc_timings_refined0_mean.index)
+    # names = list(timings_refined0_mean.index)
+
+    # Create bar plot
+    fig, ax = plt.subplots()
+
+    keys = [
+        "KSPSolve",
+        "SNESJacobianEval",
+        "SNESFunctionEval",
+    ]
+
+    indices = [list(petsc_names).index(key) for key in keys]
+    x = np.arange(0, 3)
+    width = 0.7
+    bottom = np.zeros_like(x)
+
+    colors = plt.cm.tab10.colors
+
+    total_index = timings_refined0_mean.index.tolist().index(
+        "dendritic-spine-example [main]"
+    )
+
+    total_time_mean = [
+        timings_refined0_mean["wall tot"].values[total_index],
+        timings_refined1_mean["wall tot"].values[total_index],
+        timings_refined2_mean["wall tot"].values[total_index],
+    ]
+    total_time_std = [
+        timings_refined0_std["wall tot"].values[total_index],
+        timings_refined1_std["wall tot"].values[total_index],
+        timings_refined2_std["wall tot"].values[total_index],
+    ]
+
+    assemble_time = [
+        petsc_timings_refined0_mean["time"].values[indices[1]]
+        + petsc_timings_refined0_mean["time"].values[indices[2]],
+        petsc_timings_refined1_mean["time"].values[indices[1]]
+        + petsc_timings_refined1_mean["time"].values[indices[2]],
+        petsc_timings_refined2_mean["time"].values[indices[1]]
+        + petsc_timings_refined2_mean["time"].values[indices[2]],
+    ]
+
+    ksp_time = [
+        petsc_timings_refined0_mean["time"].values[indices[0]],
+        petsc_timings_refined1_mean["time"].values[indices[0]],
+        petsc_timings_refined2_mean["time"].values[indices[0]],
+    ]
+    rest_time = [
+        total_time_mean[0] - assemble_time[0] - ksp_time[0],
+        total_time_mean[1] - assemble_time[1] - ksp_time[1],
+        total_time_mean[2] - assemble_time[2] - ksp_time[2],
+    ]
+
+    lines = []
+    labels = []
+    bottom = np.zeros(len(x))
+    # y = np.zeros_like(x)
+    for i, (label, yi) in enumerate(
+        [
+            ("Assemble", assemble_time),
+            ("KSP solve", ksp_time),
+            ("Other", rest_time),
+        ]
+    ):
+        y = np.divide(yi, total_time_mean)
+        yerr = np.divide(
+            np.sqrt(
+                np.square(np.divide(yi, total_time_mean)) * np.square(total_time_std)
+                + np.square(y) * np.square(np.divide(total_time_std, total_time_mean))
+            ),
+            total_time_mean,
+        )
+        l = ax.bar(
+            x,
+            y,
+            width=width,
+            yerr=yerr,
+            capsize=5,
+            color=colors[i],
+            bottom=bottom,
+        )
+        lines.append(l)
+        labels.append(label)
+        bottom += y
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(["standard", "fine", "extra fine"])
+    ax.set_yticks(np.arange(0, 1.1, 0.2))
+    ax.set_ylabel("Percentage of total time")
+    ax.set_yticklabels([f"{i:.0%}" for i in np.arange(0, 1.1, 0.2)])
+    ax.spines.top.set_visible(False)
+    ax.spines.right.set_visible(False)
+    # ax.spines.bottom.set_visible(False)
+    # ax.spines.left.set_visible(False)
+
+    # # Put legend outside of the plot to the right
+    fig.subplots_adjust(right=0.9)
+    lgd = fig.legend(
+        lines,
+        labels,
+        loc="center left",
+        bbox_to_anchor=(0.9, 0.5),
+        # title="Timings",
+        title_fontsize="large",
+    )
+
+    fig.savefig(
+        (output_folder / "timings_profile_stacked.png").with_suffix(f".{format}"),
+        bbox_extra_artists=(lgd,),
+        bbox_inches="tight",
+    )
+
+
+def plot_timings(all_data: list[Data], output_folder, format: str = "png"):
+    data_refined0 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 0
+    ]
+    data_refined1 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 1
+    ]
+    data_refined2 = [
+        d for d in all_data if "coarser" in d.mesh and d.num_refinements == 2
+    ]
+
+    timings_refined0 = [d.timings for d in data_refined0]
+    timings_refined0_concat = pd.concat(tuple(timings_refined0))
+    timings_refined0_mean = timings_refined0_concat.groupby("name").mean()
+    timings_refined0_std = timings_refined0_concat.groupby("name").std()
+
+    petsc_timings_refined0 = [d.petsc_timings for d in data_refined0]
+    petsc_timings_refined0_concat = pd.concat(tuple(petsc_timings_refined0))
+    petsc_timings_refined0_mean = petsc_timings_refined0_concat.groupby("name").mean()
+    petsc_timings_refined0_std = petsc_timings_refined0_concat.groupby("name").std()
+
+    timings_refined1 = [d.timings for d in data_refined1]
+    timings_refined1_concat = pd.concat(tuple(timings_refined1))
+    timings_refined1_mean = timings_refined1_concat.groupby("name").mean()
+    timings_refined1_std = timings_refined1_concat.groupby("name").std()
+
+    petsc_timings_refined1 = [d.petsc_timings for d in data_refined1]
+    petsc_timings_refined1_concat = pd.concat(tuple(petsc_timings_refined1))
+    petsc_timings_refined1_mean = petsc_timings_refined1_concat.groupby("name").mean()
+    petsc_timings_refined1_std = petsc_timings_refined1_concat.groupby("name").std()
+
+    timings_refined2 = [d.timings for d in data_refined2]
+    timings_refined2_concat = pd.concat(tuple(timings_refined2))
+    timings_refined2_mean = timings_refined2_concat.groupby("name").mean()
+    timings_refined2_std = timings_refined2_concat.groupby("name").std()
+
+    petsc_timings_refined2 = [d.petsc_timings for d in data_refined2]
+    petsc_timings_refined2_concat = pd.concat(tuple(petsc_timings_refined2))
+    petsc_timings_refined2_mean = petsc_timings_refined2_concat.groupby("name").mean()
+    petsc_timings_refined2_std = petsc_timings_refined2_concat.groupby("name").std()
+
+    petsc_names = list(petsc_timings_refined0_mean.index)
+    # names = list(timings_refined0_mean.index)
+
+    # Create bar plot
+    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+
+    keys = [
+        "KSPSolve",
+        "SNESJacobianEval",
+        "SNESFunctionEval",
+    ]
+
+    indices = [list(petsc_names).index(key) for key in keys]
+    x = np.arange(0, 3)
+    width = 0.25
+    bottom = np.zeros_like(x)
+
+    colors = plt.cm.tab10.colors
+
+    total_index = timings_refined0_mean.index.tolist().index(
+        "dendritic-spine-example [main]"
+    )
+
+    total_time_mean = [
+        timings_refined0_mean["wall tot"].values[total_index],
+        timings_refined1_mean["wall tot"].values[total_index],
+        timings_refined2_mean["wall tot"].values[total_index],
+    ]
+    total_time_std = [
+        timings_refined0_std["wall tot"].values[total_index],
+        timings_refined1_std["wall tot"].values[total_index],
+        timings_refined2_std["wall tot"].values[total_index],
+    ]
+
+    lines = []
+    labels = []
+    for j, (index, key) in enumerate(zip(indices, keys)):
+        y = np.zeros_like(x)
+        err = np.zeros_like(x)
+
+        counts = np.zeros_like(x)
+        counts_err = np.zeros_like(x)
+        for k, (timings_mean, timings_std) in enumerate(
+            [
+                (petsc_timings_refined0_mean, petsc_timings_refined0_std),
+                (petsc_timings_refined1_mean, petsc_timings_refined1_std),
+                (petsc_timings_refined2_mean, petsc_timings_refined2_std),
+            ]
+        ):
+            y[k] = float(timings_mean["time"].values[index])
+            err[k] = float(timings_std["time"].values[index])
+
+            counts[k] = float(timings_mean["count"].values[index])
+            counts_err[k] = float(timings_std["count"].values[index])
+
+        print(key, y, bottom)
+        l = ax[0].bar(
+            x + (j - 1) * width,
+            y,
+            width=width,
+            yerr=err,
+            capsize=5,
+            color=colors[j],
+        )
+        lines.append(l)
+        labels.append(key)
+
+        ax[1].bar(
+            x + (j - 1) * width,
+            counts,
+            width=width,
+            yerr=counts_err,
+            capsize=5,
+            color=colors[j],
+        )
+
+    for axi in ax:
+        axi.set_xticks(x)
+        # axi.set_xlabel("Number of refinements")
+        axi.set_xticklabels(["standard", "fine", "extra fine"])
+
+    (l,) = ax[0].plot(
+        [-width, width],
+        [total_time_mean[0], total_time_mean[0]],
+        "-.",
+        color="k",
+    )
+    lines.append(l)
+    labels.append("Total run time (coarse)")
+    (l,) = ax[0].plot(
+        [1 - width, 1 + width],
+        [total_time_mean[1], total_time_mean[1]],
+        "--",
+        color="k",
+    )
+    lines.append(l)
+    labels.append("Total run time (fine)")
+    (l,) = ax[0].plot(
+        [2 - width, 2 + width], [total_time_mean[2], total_time_mean[2]], ":", color="k"
+    )
+    lines.append(l)
+    labels.append("Total run time (finest)")
+
+    # Put legend outside of the plot to the right
+    fig.subplots_adjust(right=0.9)
+    lgd = fig.legend(
+        lines,
+        labels,
+        loc="center left",
+        bbox_to_anchor=(0.9, 0.5),
+        title="Timings",
+        title_fontsize="large",
+    )
+    ax[0].set_yscale("log")
+    ax[0].set_ylabel("Time (s)")
+    ax[1].set_ylabel("Number of calls")
+
+    fig.savefig(
+        (output_folder / "timings_profile.png").with_suffix(f".{format}"),
+        bbox_extra_artists=(lgd,),
+        bbox_inches="tight",
+    )
+
+    num_dofs = [49194, 323328, 2299090]
+
+    x = np.array(num_dofs)
+    fig, ax = plt.subplots()
+    ax.errorbar(
+        num_dofs,
+        total_time_mean,
+        yerr=total_time_std,
+        linewidth=2,
+        fmt="o-",
+        label="Total run time",
+    )
+    ax.plot(
+        num_dofs,
+        5e-4 * x * np.log(x),
+        "--",
+        color="k",
+        linewidth=2,
+        label="$\mathcal{O}(N\mathrm{log}N)$",
+    )
+    ax.plot(num_dofs, 5e-3 * x, ":", color="k", linewidth=2, label="$\mathcal{O}(N)$")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+
+    ax.spines.right.set_visible(False)
+    ax.spines.top.set_visible(False)
+    ax.set_xlabel("Number of degrees of freedom (N)")
+    ax.set_ylabel("Total time (s)")
+    ax.legend()
+    fig.savefig(
+        (output_folder / "total_time_vs_dofs.png").with_suffix(f".{format}"),
+        bbox_inches="tight",
+    )
+    print(np.diff(total_time_mean) / np.diff(num_dofs))
+
+    print("Percentage of total time (assembly)")
+    print(
+        (
+            "standard: ",
+            (petsc_timings_refined0_mean["time"].values[indices[1]]
+            + petsc_timings_refined0_mean["time"].values[indices[2]])
+            / timings_refined0_mean["wall tot"].values[total_index],
+        )
+    )
+
+    print(
+        (
+            "fine",
+            (petsc_timings_refined1_mean["time"].values[indices[1]]
+            + petsc_timings_refined1_mean["time"].values[indices[2]])
+            / timings_refined1_mean["wall tot"].values[total_index],
+        )
+    )
+
+    print(
+        (
+            "extra fine",
+            (petsc_timings_refined2_mean["time"].values[indices[1]]
+            + petsc_timings_refined2_mean["time"].values[indices[2]])
+            / timings_refined2_mean["wall tot"].values[total_index],
+        )
+    )
+
+    print("Percentage of total time (KSP)")
+    print(
+        "standard",
+        petsc_timings_refined0_mean["time"].values[indices[0]]
+        / timings_refined0_mean["wall tot"].values[total_index],
+    )
+    print(
+        "fine: ",
+        petsc_timings_refined1_mean["time"].values[indices[0]]
+        / timings_refined1_mean["wall tot"].values[total_index],
+    )
+    print(
+        "extra fine: ",
+        petsc_timings_refined2_mean["time"].values[indices[0]]
+        / timings_refined2_mean["wall tot"].values[total_index],
+    )
+
+    print("Setup time")
+    index = timings_refined0_mean.index.tolist().index("Setup [main]")
+    print(
+        "standard: ",
+        timings_refined0_mean["wall tot"].values[index]
+        / timings_refined0_mean["wall tot"].values[total_index],
+    )
+    print(
+        "fine: ",
+        timings_refined1_mean["wall tot"].values[index]
+        / timings_refined1_mean["wall tot"].values[total_index],
+    )
+    print(
+        "extra fine: ",
+        timings_refined2_mean["wall tot"].values[index]
+        / timings_refined2_mean["wall tot"].values[total_index],
+    )
+
+
+def plot_linf_error(
+    all_data: list[Data], output_folder, format: str = "png", subdomains=[]
+):
     here = Path(__file__).parent
     import dolfin
     import sys
@@ -341,18 +794,26 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
     avg_finest_file = output_folder / "avg_finest.txt"
 
     if (
-            not max_errs_file.is_file()
-            or not l2_errs_file.is_file()
-            or not l1_errs_file.is_file()
-            or not avg_coarsest_file.is_file()
-            or not avg_finest_file.is_file()
-        ):
+        not max_errs_file.is_file()
+        or not l2_errs_file.is_file()
+        or not l1_errs_file.is_file()
+        or not avg_coarsest_file.is_file()
+        or not avg_finest_file.is_file()
+    ):
         # pull out mesh files from data structure
         mesh_file_coarsest = str(
-            here / ".." / "scripts" / "meshes-dendritic-spine" / f"{coarsest_data.mesh}.h5"
+            here
+            / ".."
+            / "scripts"
+            / "meshes-dendritic-spine"
+            / f"{coarsest_data.mesh}.h5"
         )
         mesh_file_finest = str(
-            here / ".." / "scripts" / "meshes-dendritic-spine" / f"{finest_data.mesh}.h5"
+            here
+            / ".."
+            / "scripts"
+            / "meshes-dendritic-spine"
+            / f"{finest_data.mesh}.h5"
         )
         # Load solutions
         coarsest_solutions = smart_analysis.load_solution(
@@ -373,9 +834,11 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
 
         if len(subdomains) > 0:
             coarsest_mf = dolfin.MeshFunction(
-                    "size_t", V_coarsest.mesh(), V_coarsest.mesh().topology().dim(), 0)
+                "size_t", V_coarsest.mesh(), V_coarsest.mesh().topology().dim(), 0
+            )
             finest_mf = dolfin.MeshFunction(
-                    "size_t", V_finest.mesh(), V_finest.mesh().topology().dim(), 0)
+                "size_t", V_finest.mesh(), V_finest.mesh().topology().dim(), 0
+            )
             for k, subdomain in enumerate(subdomains):
                 if len(subdomain) == 6:
                     meshes = [V_coarsest.mesh(), V_finest.mesh()]
@@ -396,19 +859,21 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
                                 and zCur > subdomain[2]
                                 and zCur < subdomain[5]
                             ):
-                                mf[c] = k+1
-            dx_coarsest = dolfin.Measure("dx", V_coarsest.mesh(),subdomain_data=coarsest_mf)
-            dx_finest = dolfin.Measure("dx", V_finest.mesh(),subdomain_data=finest_mf)
-            vol_coarsest = [dolfin.assemble(1.0*dx_coarsest)]
-            vol_finest = [dolfin.assemble(1.0*dx_finest)]
+                                mf[c] = k + 1
+            dx_coarsest = dolfin.Measure(
+                "dx", V_coarsest.mesh(), subdomain_data=coarsest_mf
+            )
+            dx_finest = dolfin.Measure("dx", V_finest.mesh(), subdomain_data=finest_mf)
+            vol_coarsest = [dolfin.assemble(1.0 * dx_coarsest)]
+            vol_finest = [dolfin.assemble(1.0 * dx_finest)]
             for k in range(len(subdomains)):
-                vol_coarsest.append(dolfin.assemble(1.0*dx_coarsest(k+1)))
-                vol_finest.append(dolfin.assemble(1.0*dx_finest(k+1)))
+                vol_coarsest.append(dolfin.assemble(1.0 * dx_coarsest(k + 1)))
+                vol_finest.append(dolfin.assemble(1.0 * dx_finest(k + 1)))
         else:
             dx_coarsest = dolfin.Measure("dx", V_coarsest.mesh())
-            vol_coarsest = [dolfin.assemble(1.0*dx_coarsest)]
+            vol_coarsest = [dolfin.assemble(1.0 * dx_coarsest)]
             dx_finest = dolfin.Measure("dx", V_finest.mesh())
-            vol_finest = [dolfin.assemble(1.0*dx_finest)]
+            vol_finest = [dolfin.assemble(1.0 * dx_finest)]
 
         u_err_fname = output_folder / "u_err.xdmf"
         u_err_fname.unlink(missing_ok=True)
@@ -416,27 +881,38 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
         err_file = dolfin.XDMFFile(dolfin.MPI.comm_world, str(u_err_fname))
         err_file.parameters["flush_output"] = True
 
-        avg_coarsest = np.zeros([len(coarsest_data.t),len(subdomains)+1])
-        avg_finest = np.zeros([len(finest_data.t),len(subdomains)+1])
-        avg_coarsest[0][0] = dolfin.assemble(u_coarsest*dx_coarsest)/vol_coarsest[0]
-        avg_finest[0][0] = dolfin.assemble(u_finest*dx_finest)/vol_finest[0]
+        avg_coarsest = np.zeros([len(coarsest_data.t), len(subdomains) + 1])
+        avg_finest = np.zeros([len(finest_data.t), len(subdomains) + 1])
+        avg_coarsest[0][0] = dolfin.assemble(u_coarsest * dx_coarsest) / vol_coarsest[0]
+        avg_finest[0][0] = dolfin.assemble(u_finest * dx_finest) / vol_finest[0]
         for k in range(len(subdomains)):
-            avg_coarsest[0][k+1] = dolfin.assemble(u_coarsest*dx_coarsest(k+1))/vol_coarsest[k+1]
-            avg_finest[0][k+1] = dolfin.assemble(u_finest*dx_finest(k+1))/vol_finest[k+1]
+            avg_coarsest[0][k + 1] = (
+                dolfin.assemble(u_coarsest * dx_coarsest(k + 1)) / vol_coarsest[k + 1]
+            )
+            avg_finest[0][k + 1] = (
+                dolfin.assemble(u_finest * dx_finest(k + 1)) / vol_finest[k + 1]
+            )
 
         print("Computing errors")
         max_errs = [0.0]
         l2_errs = [0.0]
         l1_errs = [0.0]
-        i=1
+        i = 1
         for u_coarsest, u_finest, t in zip(
             coarsest_solutions, finest_solutions, coarsest_data.t
         ):
-            avg_coarsest[i][0] = dolfin.assemble(u_coarsest*dx_coarsest)/vol_coarsest[0]
-            avg_finest[i][0] = dolfin.assemble(u_finest*dx_finest)/vol_finest[0]
+            avg_coarsest[i][0] = (
+                dolfin.assemble(u_coarsest * dx_coarsest) / vol_coarsest[0]
+            )
+            avg_finest[i][0] = dolfin.assemble(u_finest * dx_finest) / vol_finest[0]
             for k in range(len(subdomains)):
-                avg_coarsest[i][k+1] = dolfin.assemble(u_coarsest*dx_coarsest(k+1))/vol_coarsest[k+1]
-                avg_finest[i][k+1] = dolfin.assemble(u_finest*dx_finest(k+1))/vol_finest[k+1]
+                avg_coarsest[i][k + 1] = (
+                    dolfin.assemble(u_coarsest * dx_coarsest(k + 1))
+                    / vol_coarsest[k + 1]
+                )
+                avg_finest[i][k + 1] = (
+                    dolfin.assemble(u_finest * dx_finest(k + 1)) / vol_finest[k + 1]
+                )
 
             for j, point in enumerate(V_finest.tabulate_dof_coordinates()):
                 u_coarsest_interp.vector()[j] = u_coarsest(point)
@@ -456,7 +932,7 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
                 )
             )
             print(f"Processed error data {i+1} of {len(coarsest_data.t)}")
-            i+=1
+            i += 1
 
         # Save as text files
         np.savetxt(max_errs_file, max_errs)
@@ -472,7 +948,7 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
     avg_finest = np.loadtxt(avg_finest_file)
 
     # Plot errors in three subplots
-    fig, ax = plt.subplots(3, 1)#, figsize=(8, 12))
+    fig, ax = plt.subplots(3, 1)  # , figsize=(8, 12))
     ax[0].plot(max_errs)
     ax[0].set_title("Max error")
     ax[1].plot(l2_errs)
@@ -490,10 +966,15 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
         fine_avgs = []
         for i in range(len(subdomains)):
             cases.append(f"Region{i}")
-            coarse_maxes.append(max(avg_coarsest[:,i+1]))
-            fine_maxes.append(max(avg_finest[:,i+1]))
-            coarse_avgs.append(np.trapz(avg_coarsest[:,i+1], coarsest_data.t)/np.ptp(coarsest_data.t))
-            fine_avgs.append(np.trapz(avg_finest[:,i+1], finest_data.t)/np.ptp(finest_data.t))
+            coarse_maxes.append(max(avg_coarsest[:, i + 1]))
+            fine_maxes.append(max(avg_finest[:, i + 1]))
+            coarse_avgs.append(
+                np.trapz(avg_coarsest[:, i + 1], coarsest_data.t)
+                / np.ptp(coarsest_data.t)
+            )
+            fine_avgs.append(
+                np.trapz(avg_finest[:, i + 1], finest_data.t) / np.ptp(finest_data.t)
+            )
         cases = tuple(cases)
         maxes = {"coarse": tuple(coarse_maxes), "fine": tuple(fine_maxes)}
         avgs = {"coarse": tuple(coarse_avgs), "fine": tuple(fine_avgs)}
@@ -501,15 +982,15 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
         x = np.arange(len(cases))  # the label locations
         width = 0.25  # the width of the bars
 
-        fig, ax = plt.subplots(2, 1, figsize=(4,6))
+        fig, ax = plt.subplots(2, 1, figsize=(4, 6))
         multiplier = 0
         for attribute, measurement in maxes.items():
             offset = width * multiplier
             ax[0].bar(x + offset, measurement, width, label=attribute)
             multiplier += 1
         # Add some text for labels, title and custom x-axis tick labels, etc.
-        ax[0].set_ylabel('Max calcium (μM)')
-        ax[0].set_xticks(x + width/2, cases)
+        ax[0].set_ylabel("Max calcium (μM)")
+        ax[0].set_xticks(x + width / 2, cases)
         ax[0].legend()
 
         multiplier = 0
@@ -518,9 +999,46 @@ def plot_linf_error(all_data: list[Data], output_folder, format: str = "png", su
             ax[1].bar(x + offset, measurement, width, label=attribute)
             multiplier += 1
         # Add some text for labels, title and custom x-axis tick labels, etc.
-        ax[1].set_ylabel('Avg calcium (μM)')
-        ax[1].set_xticks(x + width/2, cases)
+        ax[1].set_ylabel("Avg calcium (μM)")
+        ax[1].set_xticks(x + width / 2, cases)
         fig.savefig((output_folder / "summary_ca_error.png").with_suffix(f".{format}"))
+
+
+def print_dofs(all_data):
+    data = sorted(
+        [
+            d
+            for d in all_data
+            if "coarser" in d.mesh and np.isclose(d.dt, 0.001) and d.ntasks == 1
+        ],
+        key=lambda x: x.num_refinements,
+    )
+    mesh_files = {
+        d.num_refinements: (Path(d.config["mesh_file"]), d.folder) for d in data
+    }
+
+    import sys
+
+    sys.path.append((Path(__file__).parent / ".." / "utils").as_posix())
+    import smart_analysis
+
+    for num_refinement, (mesh_file, results_folder) in mesh_files.items():
+        print(f"Load {num_refinement=}")
+        solution = next(
+            smart_analysis.load_solution(
+                mesh_file.as_posix(), results_folder / "Ca.h5", 0
+            )
+        )
+        hmin = solution.function_space().mesh().hmin()
+        hmax = solution.function_space().mesh().hmax()
+        num_dofs = solution.function_space().dim()
+        print(
+            f"Mesh: {mesh_file.stem}, {num_refinement=}, {num_dofs=}, {hmin=}, {hmax=}"
+        )
+
+    # print(f"Mesh: {d.mesh}")
+    # print(f"Number of dofs: {d.concVec.size}")
+    # print(f"Number of gradients: {d.gradVec.size}")
 
 
 def main(
@@ -545,10 +1063,12 @@ def main(
         results_file.write_text(
             json.dumps([r.to_json() for r in all_results], indent=4)
         )
-
-    plot_linf_error(all_results, output_folder, format=format)
     # plot_data(all_results, output_folder, format=format)
     # plot_refinement_study(all_results, output_folder, format=format)
+    # plot_timings(all_results, output_folder, format=format)
+    plot_timings_stacked(all_results, output_folder, format=format)
+    # plot_linf_error(all_results, output_folder, format=format)
+    # print_dofs(all_results)
     return 0
 
 
