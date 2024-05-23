@@ -296,6 +296,7 @@ def mito_example(
     submit_tscc: bool = False,
     ntasks: int = 1,
     partition: str = "defq",
+    single_compartment_im: bool = True,
     **kwargs,
 ):
     args = [
@@ -310,6 +311,9 @@ def mito_example(
         "--D",
         D,
     ]
+
+    if single_compartment_im:
+        args.append("--single-compartment-im")
 
     if not submit_ex3:
         args.extend(["--outdir", Path(outdir).as_posix()])
