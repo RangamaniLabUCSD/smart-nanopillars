@@ -42,7 +42,8 @@ All meshes can be downloaded from the [``SMART Demo Meshes" Zenodo dataset](http
 To run any of the Jupyter notebook versions of the examples, these meshes should be present in the main folder of the local repository.
 Alternatively, the paths can be provided when running in Python scripts as described in the README in the `scripts` folder.
 
-The output from all analyses are freely available from the [``SMART Analysis data'' Zenodo dataset]().
+The output from all analyses are freely available from the [``SMART Analysis data'' Zenodo dataset](https://zenodo.org/doi/10.5281/zenodo.11252054).
+These results can be downloaded to locally regenerate any of the main plots.
 
 Shield: [![CC BY-SA 4.0][cc-by-sa-shield]][cc-by-sa]
 
