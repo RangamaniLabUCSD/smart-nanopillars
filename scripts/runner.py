@@ -4,35 +4,7 @@ from textwrap import dedent
 from pathlib import Path
 import subprocess as sp
 
-ex3_template = dedent(
-    """#!/bin/bash
-#SBATCH --job-name="{job_name}"
-#SBATCH --partition={partition}
-#SBATCH --time=6-00:00:00
-#SBATCH --ntasks={ntasks}
-#SBATCH --output=%j-%x-stdout.txt
-#SBATCH --error=%j-%x-stderr.txt
-
-module purge
-module use /cm/shared/ex3-modules/latest/modulefiles
-module load  gcc-10.1.0
-module load libgfortran-5.0.0
-. /home/henriknf/local/src/spack/share/spack/setup-env.sh
-spack env activate fenics-dev-{partition}
-
-SCRATCH_DIRECTORY=/global/D1/homes/${{USER}}/smart-comp-sci/{job_name}/${{SLURM_JOBID}}
-mkdir -p ${{SCRATCH_DIRECTORY}}
-echo "Scratch directory: ${{SCRATCH_DIRECTORY}}"
-
-echo 'Run command: python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}'
-echo 'Partition: {partition}'
-echo 'ntasks: {ntasks}'
-mpirun -n {ntasks} python {script} --outdir "${{SCRATCH_DIRECTORY}}" {args}
-# Move log file to results folder
-mv ${{SLURM_JOBID}}-* ${{SCRATCH_DIRECTORY}}
-"""
-)
-
+# could specify memory below in SLURM script as #SBATCH --mem=4G
 tscc_template = dedent(
     """#!/bin/bash
 #SBATCH --job-name="{job_name}"
@@ -43,6 +15,7 @@ tscc_template = dedent(
 #SBATCH --error=%j-%x-stderr.txt
 #SBATCH --account=csd786
 #SBATCH --qos=hcp-csd765
+#SBATCH --mem=4G
 
 module load singularitypro/3.11
 module load mpich/ge/gcc/64/3.4.2
@@ -82,9 +55,7 @@ def run(
         print(f"Run command: {sys.executable} {script} {args_str}")
         return
 
-    if submit_ex3:
-        template = ex3_template
-    elif submit_tscc:
+    if submit_tscc:
         template = tscc_template
     else:
         sp.run(["mpirun", "-n", str(ntasks), sys.executable, script, *in_args])
@@ -104,238 +75,6 @@ def run(
     job_file.unlink()
 
 
-def preprocess_phosphorylation_mesh(
-    mesh_folder: Path,
-    curRadius: float,
-    hEdge: float,
-    num_refinements: int,
-    axisymmetric: bool,
-    rect: bool,
-    dry_run: bool,
-    **kwargs,
-):
-    args = [
-        "--mesh-folder",
-        Path(mesh_folder).as_posix(),
-        "--curRadius",
-        curRadius,
-        "--hEdge",
-        hEdge,
-        "--num-refinements",
-        num_refinements,
-    ]
-    if axisymmetric:
-        args.append("--axisymmetric")
-
-    if rect:
-        args.append("--rect")
-
-    script = (
-        (here / ".." / "phosphorylation-example" / "pre_process_mesh.py")
-        .absolute()
-        .resolve()
-        .as_posix()
-    )
-    run(
-        args=args,
-        dry_run=dry_run,
-        script=script,
-        submit_ex3=False,
-        submit_tscc=False,
-    )
-
-
-def phosphorylation_example(
-    mesh_folder: Path,
-    outdir: Path,
-    time_step: float,
-    curRadius: float,
-    axisymmetric: bool,
-    rect: bool,
-    diffusion: float = 10.0,
-    dry_run: bool = False,
-    submit_ex3: bool = False,
-    submit_tscc: bool = False,
-    ntasks: int = 1,
-    partition: str = "defq",
-    write_checkpoint: bool = False,
-    comparison_results_folder: Path = "",
-    comparison_mesh_folder: Path = "",
-    **kwargs,
-):
-    args = [
-        "--mesh-folder",
-        Path(mesh_folder).as_posix(),
-        "--time-step",
-        time_step,
-        "--curRadius",
-        curRadius,
-        "--diffusion",
-        diffusion,
-        "--comparison-results-folder",
-        comparison_results_folder,
-        "--comparison-mesh-folder",
-        comparison_mesh_folder,
-    ]
-    if axisymmetric:
-        args.append("--axisymmetric")
-
-    if rect:
-        args.append("--rect")
-
-    if write_checkpoint:
-        args.append("--write-checkpoint")
-
-    if submit_ex3 is False:
-        args.extend(["--outdir", Path(outdir).as_posix()])
-
-    script = (
-        (here / ".." / "phosphorylation-example" / "phosphorylation.py")
-        .absolute()
-        .resolve()
-        .as_posix()
-    )
-    run(
-        job_name="phosphorylation",
-        args=args,
-        dry_run=dry_run,
-        script=script,
-        submit_ex3=submit_ex3,
-        submit_tscc=submit_tscc,
-        ntasks=ntasks,
-        partition=partition,
-    )
-
-
-def postprocess_phosphorylation(
-    results_folder: Path,
-    output_folder: Path,
-    skip_if_processed: bool = False,
-    use_tex: bool = False,
-    dry_run: bool = False,
-    format: str = "png",
-    **kwargs,
-):
-    args = [
-        "--results-folder",
-        Path(results_folder).as_posix(),
-        "--output-folder",
-        Path(output_folder).as_posix(),
-        "--format",
-        format,
-    ]
-    if skip_if_processed:
-        args.append("--skip-if-processed")
-    if use_tex:
-        args.append("--use-tex")
-    script = (
-        (here / ".." / "phosphorylation-example" / "postprocess.py")
-        .absolute()
-        .resolve()
-        .as_posix()
-    )
-    run(
-        args=args,
-        dry_run=dry_run,
-        script=script,
-        submit_ex3=False,
-        submit_tscc=False,
-    )
-
-
-def preprocess_mito_mesh(
-    input_mesh_file: Path,
-    output_mesh_file: Path,
-    input_curv_file: Path,
-    output_curv_file: Path,
-    dry_run: bool,
-    num_refinements: int,
-    single_compartment_im: bool,
-    **kwargs,
-):
-    args = [
-        "--input-mesh-file",
-        Path(input_mesh_file).as_posix(),
-        "--output-mesh-file",
-        Path(output_mesh_file).as_posix(),
-        "--input-curv-file",
-        Path(input_curv_file).as_posix(),
-        "--output-curv-file",
-        Path(output_curv_file).as_posix(),
-        "--num-refinements",
-        num_refinements,
-    ]
-
-    if single_compartment_im:
-        args.append("--single-compartment-im")
-
-    script = (
-        (here / ".." / "mito-example" / "pre_process_mesh.py")
-        .absolute()
-        .resolve()
-        .as_posix()
-    )
-    run(
-        args=args,
-        dry_run=dry_run,
-        script=script,
-        submit_ex3=False,
-        submit_tscc=False,
-    )
-
-
-def mito_example(
-    mesh_file: Path,
-    curv_file: Path,
-    outdir: Path,
-    time_step: float,
-    curv_dep: float,
-    D: float,
-    dry_run: bool = False,
-    submit_ex3: bool = False,
-    submit_tscc: bool = False,
-    ntasks: int = 1,
-    partition: str = "defq",
-    single_compartment_im: bool = True,
-    **kwargs,
-):
-    args = [
-        "--mesh-file",
-        Path(mesh_file).as_posix(),
-        "--curv-file",
-        Path(curv_file).as_posix(),
-        "--time-step",
-        time_step,
-        "--curv-dep",
-        curv_dep,
-        "--D",
-        D,
-    ]
-
-    if single_compartment_im:
-        args.append("--single-compartment-im")
-
-    if not submit_ex3:
-        args.extend(["--outdir", Path(outdir).as_posix()])
-
-    script = (
-        (here / ".." / "mito-example" / "mito_atp_dynamics.py")
-        .absolute()
-        .resolve()
-        .as_posix()
-    )
-    run(
-        job_name="mito",
-        args=args,
-        dry_run=dry_run,
-        script=script,
-        submit_ex3=submit_ex3,
-        submit_tscc=submit_tscc,
-        ntasks=ntasks,
-        partition=partition,
-    )
-
-
 def pre_preprocess_mech_mesh(
     mesh_folder: Path,
     shape: str,
@@ -348,6 +87,7 @@ def pre_preprocess_mech_mesh(
     nanopillar_height: float,
     nanopillar_spacing: float,
     contact_rad: float,
+    nuc_compression: float,
     **kwargs,
 ):
     args = [
@@ -369,13 +109,15 @@ def pre_preprocess_mech_mesh(
         nanopillar_spacing,
         "--contact-rad",
         contact_rad,
+        "--nuc-compression",
+        nuc_compression,
     ]
 
     if full_3d:
         args.append("--full-3d")
 
     script = (
-        (here / ".." / "mechanotransduction-example" / "pre_process_mesh.py")
+        (here / ".." / "model-files" / "pre_process_mesh.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -398,12 +140,14 @@ def mechanotransduction_example(
     axisymmetric: bool,
     well_mixed: bool,
     dry_run: bool = False,
-    submit_ex3: bool = False,
     submit_tscc: bool = False,
     ntasks: int = 1,
     partition: str = "defq",
     curv_sens: float = 0.0,
     reaction_rate_on_np = 1.0,
+    npc_slope = 0.0,
+    u0_npc = 0.0,
+    nuc_compression = 0.0,
     **kwargs,
 ):
     args = [
@@ -419,17 +163,22 @@ def mechanotransduction_example(
         curv_sens,
         "--reaction-rate-on-np",
         reaction_rate_on_np,
+        "--npc-slope",
+        npc_slope,
+        "--u0-npc",
+        u0_npc,
+        "--nuc-compression",
+        nuc_compression,
     ]
     if axisymmetric:
         args.append("--axisymmetric")
     if well_mixed:
         args.append("--well-mixed")
 
-    if submit_ex3 is False:
-        args.extend(["--outdir", Path(outdir).as_posix()])
+    args.extend(["--outdir", Path(outdir).as_posix()])
 
     script = (
-        (here / ".." / "mechanotransduction-example" / "mechanotransduction.py")
+        (here / ".." / "model-files" / "mechanotransduction.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -439,7 +188,67 @@ def mechanotransduction_example(
         args=args,
         dry_run=dry_run,
         script=script,
-        submit_ex3=submit_ex3,
+        submit_ex3=False,
+        submit_tscc=submit_tscc,
+        ntasks=ntasks,
+        partition=partition,
+    )
+
+def mechanotransduction_example_nuc_only(
+    mesh_folder: Path,
+    outdir: Path,
+    full_sims_folder: Path,
+    time_step: float,
+    dry_run: bool = False,
+    submit_tscc: bool = False,
+    ntasks: int = 1,
+    partition: str = "defq",
+    u0_npc = 0.0,
+    nuc_compression = 0.0,
+    pore_size = 0.5,
+    pore_loc = 0.0,
+    pore_rate = 10.0,
+    transport_rate = 10.0,
+    transport_ratio = 1.0,
+    **kwargs,
+):
+    args = [
+        "--mesh-folder",
+        Path(mesh_folder).as_posix(),
+        "--full-sims-folder",
+        Path(full_sims_folder).as_posix(),
+        "--time-step",
+        time_step,
+        "--u0-npc",
+        u0_npc,
+        "--nuc-compression",
+        nuc_compression,
+        "--pore-size",
+        pore_size,
+        "--pore-loc",
+        pore_loc,
+        "--pore-rate",
+        pore_rate,
+        "--transport-rate",
+        transport_rate,
+        "--transport-ratio",
+        transport_ratio
+    ]
+
+    args.extend(["--outdir", Path(outdir).as_posix()])
+
+    script = (
+        (here / ".." / "model-files" / "mechanotransduction_nucTransportOnly.py")
+        .absolute()
+        .resolve()
+        .as_posix()
+    )
+    run(
+        job_name="mechanotransduction",
+        args=args,
+        dry_run=dry_run,
+        script=script,
+        submit_ex3=False,
         submit_tscc=submit_tscc,
         ntasks=ntasks,
         partition=partition,
@@ -469,7 +278,7 @@ def postprocess_mechanotransduction(
         args.append("--use-tex")
 
     script = (
-        (here / ".." / "mechanotransduction-example" / "postprocess.py")
+        (here / ".." / "model-files" / "postprocess.py")
         .absolute()
         .resolve()
         .as_posix()
@@ -480,178 +289,6 @@ def postprocess_mechanotransduction(
         script=script,
         submit_ex3=False,
         submit_tscc=False,
-    )
-
-
-def preprocess_cru_mesh(
-    input_mesh_file: Path,
-    output_mesh_file: Path,
-    dry_run: bool,
-    num_refinements: int,
-    **kwargs,
-):
-    args = [
-        "--input-mesh-file",
-        Path(input_mesh_file).as_posix(),
-        "--output-mesh-file",
-        Path(output_mesh_file).as_posix(),
-        "--num-refinements",
-        num_refinements,
-    ]
-
-    script = (
-        (here / ".." / "cru-example" / "pre_process_mesh_cru.py")
-        .absolute()
-        .resolve()
-        .as_posix()
-    )
-    run(
-        args=args,
-        dry_run=dry_run,
-        script=script,
-        submit_ex3=False,
-        submit_tscc=False,
-    )
-
-
-def cru_example(
-    mesh_file: Path,
-    outdir: Path,
-    time_step: float,
-    no_serca: bool,
-    dry_run: bool = False,
-    submit_ex3: bool = False,
-    submit_tscc: bool = False,
-    **kwargs,
-):
-    args = [
-        "--mesh-file",
-        Path(mesh_file).as_posix(),
-        "--time-step",
-        time_step,
-    ]
-
-    if no_serca:
-        args.append("--no-serca")
-
-    if submit_ex3 is False:
-        args.extend(["--outdir", Path(outdir).as_posix()])
-
-    script = (here / ".." / "cru-example" / "cru.py").absolute().resolve().as_posix()
-    run(
-        job_name="cru",
-        args=args,
-        dry_run=dry_run,
-        script=script,
-        submit_ex3=submit_ex3,
-        submit_tscc=submit_tscc,
-    )
-
-
-def preprocess_spine_mesh(
-    input_mesh_file: Path,
-    output_mesh_file: Path,
-    dry_run: bool,
-    num_refinements: int,
-    **kwargs,
-):
-    args = [
-        "--input-mesh-file",
-        Path(input_mesh_file).as_posix(),
-        "--output-mesh-file",
-        Path(output_mesh_file).as_posix(),
-        "--num-refinements",
-        num_refinements,
-    ]
-
-    script = (
-        (here / ".." / "dendritic-spine-example" / "pre_process_mesh.py")
-        .absolute()
-        .resolve()
-        .as_posix()
-    )
-    run(
-        args=args,
-        dry_run=dry_run,
-        script=script,
-        submit_ex3=False,
-        submit_tscc=False,
-    )
-
-
-def dendritic_spine_postprocess(
-    results_folder: Path,
-    output_folder: Path,
-    skip_if_processed: bool = False,
-    use_tex: bool = False,
-    dry_run: bool = False,
-    format: str = "png",
-    **kwargs,
-):
-    args = [
-        "--results-folder",
-        Path(results_folder).as_posix(),
-        "--output-folder",
-        Path(output_folder).as_posix(),
-        "--format",
-        format,
-    ]
-    if skip_if_processed:
-        args.append("--skip-if-processed")
-    if use_tex:
-        args.append("--use-tex")
-
-    script = (
-        (here / ".." / "dendritic-spine-example" / "postprocess.py")
-        .absolute()
-        .resolve()
-        .as_posix()
-    )
-    run(
-        args=args,
-        dry_run=dry_run,
-        script=script,
-        submit_ex3=False,
-        submit_tscc=False,
-    )
-
-
-def dendritic_spine_example(
-    mesh_file: Path,
-    outdir: Path,
-    time_step: float,
-    dry_run: bool = False,
-    submit_ex3: bool = False,
-    submit_tscc: bool = False,
-    ntasks: int = 1,
-    partition: str = "defq",
-    **kwargs,
-):
-    args = [
-        "--mesh-file",
-        Path(mesh_file).as_posix(),
-        "--time-step",
-        time_step,
-    ]
-
-    if submit_ex3 is False:
-        args.extend(["--outdir", Path(outdir).as_posix()])
-
-    script = (
-        (here / ".." / "dendritic-spine-example" / "dendritic_spine.py")
-        .absolute()
-        .resolve()
-        .as_posix()
-    )
-    run(
-        job_name="dendritic_spine",
-        args=args,
-        dry_run=dry_run,
-        script=script,
-        submit_ex3=submit_ex3,
-        submit_tscc=submit_tscc,
-        ntasks=ntasks,
-        partition=partition,
     )
 
 
@@ -659,8 +296,8 @@ def convert_notebooks(dry_run: bool = False, **kwargs):
     import jupytext
 
     for example_folder in (here / "..").iterdir():
-        # Only look in folders that contains the word example
-        if "example" not in example_folder.stem:
+        # Only look in folders that contains the word model
+        if "model" not in example_folder.stem:
             continue
 
         # Loop over all files in that folder
