@@ -78,52 +78,44 @@ def main(
     hEdge: float = 0.6,
     hInnerEdge: float = 0.6,
     num_refinements: int = 0,
-    full_3d=False,
+    full_3d = False,
+    nanopillar_radius: float = 0,
+    nanopillar_height: float = 0,
+    nanopillar_spacing: float = 0,
+    contact_rad: float = 13.0,
+    nuc_compression: float = 0.0,
 ):
     here = Path(__file__).parent.absolute()
     sys.path.append((here / ".." / "utils").as_posix())
 
     import spread_cell_mesh_generation as mesh_gen
 
-    if full_3d:
-        sym_fraction = 1
-    else:
-        sym_fraction = shape2symfraction(shape)
-
-    # initialize current mesh
-    if sym_fraction == 0:
-        cell_mesh, facet_markers, cell_markers = mesh_gen.create_2Dcell(
-            outerExpr=outerExpr13,
-            innerExpr=innerExpr13,
-            hEdge=hEdge,
-            hInnerEdge=hInnerEdge,
-            half_cell=True,
-        )
-        cell_mesh, cell_markers, facet_markers, _ = refine(
-            cell_mesh,
-            cell_markers,
-            facet_markers,
-            num_refinements,
-        )
-    else:
-        print(f"h={hEdge},{hInnerEdge} theta={shape2theta(shape)} sym_fraction={sym_fraction}")
-        cell_mesh, facet_markers, cell_markers = mesh_gen.create_3dcell(
-            outerExpr=outerExpr13,
-            innerExpr=innerExpr13,
-            hEdge=hEdge,
-            hInnerEdge=hInnerEdge,
-            thetaExpr=shape2theta(shape),
-            sym_fraction=sym_fraction,
-        )
-
-        cell_mesh, cell_markers, facet_markers, _ = refine(
-            cell_mesh, cell_markers, facet_markers, num_refinements
-        )
+    hNP = hEdge * 0.3
+    nanopillars = [nanopillar_radius, nanopillar_height, nanopillar_spacing]
+    cell_mesh, facet_markers, cell_markers, substrate_markers, curv_markers, u_nuc, a_nuc = mesh_gen.create_3dcell(
+                                                                        contactRad=contact_rad,
+                                                                        hEdge=hEdge, hInnerEdge=hInnerEdge,
+                                                                        hNP=hNP,
+                                                                        thetaExpr=shape2theta(shape),
+                                                                        nanopillars=nanopillars,
+                                                                        return_curvature=True,
+                                                                        sym_fraction=1/8,
+                                                                        nuc_compression=nuc_compression)
 
     mesh_folder = Path(mesh_folder)
     mesh_folder.mkdir(exist_ok=True, parents=True)
     mesh_file = mesh_folder / "spreadCell_mesh.h5"
-    mesh_tools.write_mesh(cell_mesh, facet_markers, cell_markers, mesh_file)
+    mesh_tools.write_mesh(cell_mesh, facet_markers, cell_markers, mesh_file, [substrate_markers])
+    d.File(str(mesh_folder / "facets.pvd")) << facet_markers
+    d.File(str(mesh_folder / "cells.pvd")) << cell_markers
+    # save curvatures for reference
+    curv_file_name = mesh_folder / "curvatures.xdmf"
+    with d.XDMFFile(str(curv_file_name)) as curv_file:
+        curv_file.write(curv_markers)
+    # save nuclear deformations if applicable
+    # if nuc_compression > 0:
+    #     u_nuc_file = d.XDMFFile(str(mesh_folder / "u_nuc.xdmf"))
+    #     u_nuc_file.write_checkpoint(u_nuc, "u_nuc", 0)#, d.XDMFFile.Encoding.HDF5, True)
 
 
 if __name__ == "__main__":

@@ -230,19 +230,16 @@ def analyze_all(
             subdomain_mf = d.MeshFunction(
                 "size_t", cur_mesh, cur_mesh.topology().dim(), 0
             )
-            for c in d.cells(cur_mesh):
-                xCur = c.midpoint().x()
-                yCur = c.midpoint().y()
-                zCur = c.midpoint().z()
-                if (
-                    xCur > subdomain[0]
-                    and xCur < subdomain[3]
-                    and yCur > subdomain[1]
-                    and yCur < subdomain[4]
-                    and zCur > subdomain[2]
-                    and zCur < subdomain[5]
-                ):
-                    subdomain_mf[c] = 1
+            class AnalyzeRegion(d.SubDomain):
+                def inside(self, x, on_boundary):
+                    return (x[0] > subdomain[0]
+                        and x[0] < subdomain[3]
+                        and x[1] > subdomain[1]
+                        and x[1] < subdomain[4]
+                        and x[2] > subdomain[2]
+                        and x[2] < subdomain[5])
+            region = AnalyzeRegion()
+            region.mark(subdomain_mf, 1)
         else:
             subdomain_mf = d.MeshFunction(
                 "size_t", cur_mesh, cur_mesh.topology().dim(), 1

@@ -13,7 +13,7 @@ def shape2symfraction(shape: Shape):
     if Shape[shape].value == "circle":
         return 0
     elif Shape[shape].value == "star":
-        return 1 / 10
+        return 1 / 2
     elif Shape[shape].value == "rect":
         return 1 / 4
     else:
@@ -57,6 +57,21 @@ def add_mechanotransduction_arguments(parser: argparse.ArgumentParser) -> None:
         default=1e-4,
     ) # stimulation only below z-cutoff
     parser.add_argument(
+        "--curv-sens",
+        type=float,
+        default=0.0,
+    ) # curvature sensitivity factor of FAK phosph.
+    parser.add_argument(
+        "--reaction-rate-on-np",
+        type=float,
+        default=1.0,
+    ) # fractional FAK phosph. rate on nanopillars
+    parser.add_argument(
+        "--nuc-compression",
+        type=float,
+        default=0.0,
+    ) # nuc indentation on nanopillars
+    parser.add_argument(
         "--axisymmetric",
         action="store_true",
         default=False,
@@ -65,6 +80,72 @@ def add_mechanotransduction_arguments(parser: argparse.ArgumentParser) -> None:
         "--well-mixed",
         action="store_true",
         default=False,
+    )
+    parser.add_argument(
+        "--npc-slope",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--u0-npc",
+        type=float,
+        default=0.0,
+    )
+
+def add_mechanotransduction_nucOnly_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--mesh-folder",
+        type=Path,
+        default=Path.cwd().parent / "mesh",
+    )
+    parser.add_argument(
+        "--full-sims-folder",
+        type=Path,
+        default=Path.cwd().parent / "results",
+    )
+    parser.add_argument(
+        "-o", "--outdir", type=Path, default=Path("results_nucOnly")
+    )
+    parser.add_argument(
+        "-dt",
+        "--time-step",
+        type=float,
+        default=0.01,
+    )
+    parser.add_argument(
+        "--u0-npc",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--nuc-compression",
+        type=float,
+        default=0.0,
+    ) # nuc indentation on nanopillars
+    parser.add_argument(
+        "--pore-size",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--pore-loc",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--pore-rate",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--transport-rate",
+        type=float,
+        default=10.0,
+    )
+    parser.add_argument(
+        "--transport-ratio",
+        type=float,
+        default=1.0,
     )
 
 
@@ -81,6 +162,11 @@ def add_preprocess_mech_mesh_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--hInnerEdge", type=float, default=0.6)
     parser.add_argument("--num-refinements", type=int, default=0)
     parser.add_argument("--full-3d", action="store_true", default=False)
+    parser.add_argument("--nanopillar-radius", type=float, default=0.0)
+    parser.add_argument("--nanopillar-height", type=float, default=0.0)
+    parser.add_argument("--nanopillar-spacing", type=float, default=0.0)
+    parser.add_argument("--contact-rad", type=float, default=13.0)
+    parser.add_argument("--nuc-compression", type=float, default=0.0)
 
 
 def add_mechanotransduction_postprocess_arguments(
@@ -88,20 +174,3 @@ def add_mechanotransduction_postprocess_arguments(
 ) -> None:
     parser.add_argument("-i", "--results-folder", type=Path, default="./results")
     parser.add_argument("-o", "--output-folder", type=Path, default="./")
-    parser.add_argument(
-        "-s",
-        "--skip-if-processed",
-        action="store_true",
-        default=False,
-        help=(
-            "Skip loading results from results folder "
-            "if processed results are found in the output folder"
-        )
-    )
-    parser.add_argument(
-        "--use-tex",
-        action="store_true",
-        default=False,
-        help="Use LaTex rendering for figures",
-    )
-    parser.add_argument("-f", "--format", type=str, default="png", help="Format of images")
