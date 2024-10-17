@@ -9,7 +9,7 @@ tscc_template = dedent(
     """#!/bin/bash
 #SBATCH --job-name="{job_name}"
 #SBATCH --partition=platinum
-#SBATCH --time=200:00:00
+#SBATCH --time=100:00:00
 #SBATCH --ntasks={ntasks}
 #SBATCH --output=%j-%x-stdout.txt
 #SBATCH --error=%j-%x-stderr.txt
@@ -21,7 +21,7 @@ module load singularitypro/3.11
 module load mpich/ge/gcc/64/3.4.2
 cd /tscc/nfs/home/eafrancis/gitrepos/smart-comp-sci/scripts
 
-SCRATCH_DIRECTORY=/tscc/lustre/ddn/scratch/eafrancis/smart-comp-sci-data/{job_name}
+SCRATCH_DIRECTORY=/tscc/lustre/ddn/scratch/eafrancis/nanopillar-sims
 mkdir -p ${{SCRATCH_DIRECTORY}}
 echo "Scratch directory: ${{SCRATCH_DIRECTORY}}"
 
@@ -41,10 +41,9 @@ here = Path(__file__).parent.absolute()
 
 def run(
     args,
-    dry_run: bool,
     script: str,
-    submit_ex3: bool,  # FIXME: Change this and next param to enum
     submit_tscc: bool,
+    dry_run: bool = False,
     job_name: str = "",
     ntasks: int = 1,
     partition: str = "defq",
@@ -75,19 +74,17 @@ def run(
     job_file.unlink()
 
 
-def pre_preprocess_mech_mesh(
+def preprocess_mech_mesh(
     mesh_folder: Path,
     shape: str,
     hEdge: float,
     hInnerEdge: float,
-    num_refinements: int,
-    dry_run: bool,
-    full_3d: bool,
     nanopillar_radius: float,
     nanopillar_height: float,
     nanopillar_spacing: float,
     contact_rad: float,
     nuc_compression: float,
+    sym_fraction: float,
     **kwargs,
 ):
     args = [
@@ -99,8 +96,6 @@ def pre_preprocess_mech_mesh(
         hEdge,
         "--hInnerEdge",
         hInnerEdge,
-        "--num-refinements",
-        num_refinements,
         "--nanopillar-radius",
         nanopillar_radius,
         "--nanopillar-height",
@@ -111,10 +106,9 @@ def pre_preprocess_mech_mesh(
         contact_rad,
         "--nuc-compression",
         nuc_compression,
+        "--sym-fraction",
+        sym_fraction,
     ]
-
-    if full_3d:
-        args.append("--full-3d")
 
     script = (
         (here / ".." / "model-files" / "pre_process_mesh.py")
@@ -124,9 +118,7 @@ def pre_preprocess_mech_mesh(
     )
     run(
         args=args,
-        dry_run=dry_run,
         script=script,
-        submit_ex3=False,
         submit_tscc=False,
     )
 
@@ -146,8 +138,9 @@ def mechanotransduction_example(
     curv_sens: float = 0.0,
     reaction_rate_on_np = 1.0,
     npc_slope = 0.0,
-    u0_npc = 0.0,
+    a0_npc = 0.0,
     nuc_compression = 0.0,
+    WASP_rate = 0.0,
     **kwargs,
 ):
     args = [
@@ -165,10 +158,12 @@ def mechanotransduction_example(
         reaction_rate_on_np,
         "--npc-slope",
         npc_slope,
-        "--u0-npc",
-        u0_npc,
+        "--a0-npc",
+        a0_npc,
         "--nuc-compression",
         nuc_compression,
+        "--WASP-rate",
+        WASP_rate,
     ]
     if axisymmetric:
         args.append("--axisymmetric")
@@ -188,7 +183,6 @@ def mechanotransduction_example(
         args=args,
         dry_run=dry_run,
         script=script,
-        submit_ex3=False,
         submit_tscc=submit_tscc,
         ntasks=ntasks,
         partition=partition,
@@ -203,7 +197,7 @@ def mechanotransduction_example_nuc_only(
     submit_tscc: bool = False,
     ntasks: int = 1,
     partition: str = "defq",
-    u0_npc = 0.0,
+    a0_npc = 0.0,
     nuc_compression = 0.0,
     pore_size = 0.5,
     pore_loc = 0.0,
@@ -219,8 +213,8 @@ def mechanotransduction_example_nuc_only(
         Path(full_sims_folder).as_posix(),
         "--time-step",
         time_step,
-        "--u0-npc",
-        u0_npc,
+        "--a0-npc",
+        a0_npc,
         "--nuc-compression",
         nuc_compression,
         "--pore-size",
@@ -248,7 +242,6 @@ def mechanotransduction_example_nuc_only(
         args=args,
         dry_run=dry_run,
         script=script,
-        submit_ex3=False,
         submit_tscc=submit_tscc,
         ntasks=ntasks,
         partition=partition,
@@ -287,7 +280,6 @@ def postprocess_mechanotransduction(
         args=args,
         dry_run=dry_run,
         script=script,
-        submit_ex3=False,
         submit_tscc=False,
     )
 

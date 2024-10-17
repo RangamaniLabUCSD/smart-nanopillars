@@ -87,7 +87,12 @@ def add_mechanotransduction_arguments(parser: argparse.ArgumentParser) -> None:
         default=0.0,
     )
     parser.add_argument(
-        "--u0-npc",
+        "--a0-npc",
+        type=float,
+        default=0.0,
+    )
+    parser.add_argument(
+        "--WASP-rate",
         type=float,
         default=0.0,
     )
@@ -113,7 +118,7 @@ def add_mechanotransduction_nucOnly_arguments(parser: argparse.ArgumentParser) -
         default=0.01,
     )
     parser.add_argument(
-        "--u0-npc",
+        "--a0-npc",
         type=float,
         default=0.0,
     )
@@ -160,13 +165,12 @@ def add_preprocess_mech_mesh_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument("--hEdge", type=float, default=0.6)
     parser.add_argument("--hInnerEdge", type=float, default=0.6)
-    parser.add_argument("--num-refinements", type=int, default=0)
-    parser.add_argument("--full-3d", action="store_true", default=False)
     parser.add_argument("--nanopillar-radius", type=float, default=0.0)
     parser.add_argument("--nanopillar-height", type=float, default=0.0)
     parser.add_argument("--nanopillar-spacing", type=float, default=0.0)
     parser.add_argument("--contact-rad", type=float, default=13.0)
     parser.add_argument("--nuc-compression", type=float, default=0.0)
+    parser.add_argument("--sym-fraction", type=float, default=1/8)
 
 
 def add_mechanotransduction_postprocess_arguments(

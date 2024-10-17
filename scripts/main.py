@@ -14,7 +14,7 @@ commands = {
     ),
     "mechanotransduction-preprocess": Command(
         msg="Run preprocess mechanotransduction mesh",
-        script=runner.pre_preprocess_mech_mesh
+        script=runner.preprocess_mech_mesh
     ),
     "mechanotransduction": Command(
         msg="Run mechanotransduction example",
