@@ -1,5 +1,5 @@
 """
-Functions to create meshes for mechanotransduction example
+Functions to create meshes for cell mechanotransduction on nanopillars
 """
 
 from typing import Tuple
@@ -53,7 +53,7 @@ def get_shape_coords(contactRad, nanopillars, nuc_compression):
         nanopillar_vol = num_pillars_tot * np.pi*(
             (nanopillar_rad+xSteric)**2 * (nanopillar_height-xSteric-xCurv) +
             xSteric*(nanopillar_rad**2 + nanopillar_rad*xSteric*np.pi/2 + 2*xSteric**2/3) +
-            xCurv*((nanopillar_rad+xSteric)**2 + (nanopillar_rad+xSteric)*xCurv*np.pi/2 + 
+            xCurv*((nanopillar_rad+xSteric+xCurv)**2 - (nanopillar_rad+xSteric+xCurv)*xCurv*np.pi/2 + 
                    2*xCurv**2/3))
         zOffset = nanopillar_height
     else:
@@ -62,7 +62,7 @@ def get_shape_coords(contactRad, nanopillars, nuc_compression):
     
     targetVol = 480/scaleFactor**3 *4 + nuc_vol + nanopillar_vol
     # rValsOuter, zValsOuter = implicit_curve(make_expr(*refParam))
-    rValsOuter, zValsOuter = shape_adj_axisymm(refParam, zOffset, targetVol)
+    rValsOuter, zValsOuter, outParam = shape_adj_axisymm(refParam, zOffset, targetVol)
     rValsOuter, zValsOuter = dilate_axisymm(rValsOuter, zValsOuter, targetVol, 0.0)
 
     zMax = max(zValsOuter)
@@ -94,12 +94,11 @@ def get_shape_coords(contactRad, nanopillars, nuc_compression):
         u_nuc = []
         rScale = 1
 
-    return [rValsOuter, zValsOuter, rValsInner, zValsInner, innerParam, u_nuc, rScale]
+    return [rValsOuter, zValsOuter, rValsInner, zValsInner, innerParam, u_nuc, rScale, outParam]
 
 def get_u_nuc(zOffset, zMax, nucScaleFactor, nuc_compression, nanopillars):
     nanopillar_rad, nanopillar_height, nanopillar_spacing = nanopillars[:]
     xSteric = 0.05
-    xCurv = 0.2
     nanopillar_rad += 2*xSteric # to avoid collision with PM
     aInner0, bInner, r0Inner, z0Inner = get_inner_param(zOffset, zMax, nucScaleFactor, nuc_compression)
     aInner = aInner0
@@ -197,7 +196,15 @@ def get_u_nuc(zOffset, zMax, nucScaleFactor, nuc_compression, nanopillars):
     # d.ALE.move(mesh_bound, u_shift)
     return (u_bound, aInner, bInner)
 
-def compute_stretch(u: d.Function, aInner: float, bInner: float):
+def compute_stretch(u: d.Function, aInner: float, bInner: float, nanopillars: list, z0Inner: float):
+    nanopillar_spacing = nanopillars[2]
+    xMax = np.ceil(aInner / nanopillar_spacing) * nanopillar_spacing
+    xNP = np.arange(-xMax, xMax+1e-12, nanopillar_spacing)
+    yNP = np.arange(-xMax, xMax+1e-12, nanopillar_spacing)
+    xNP, yNP = np.meshgrid(xNP, yNP)
+    xNP = xNP.flatten()
+    yNP = yNP.flatten()
+    
     I = d.Identity(3)
     F = I + d.grad(u)    # Deformation gradient
     C = F.T*F          # Right Cauchy-Green deformation tensor
@@ -216,8 +223,11 @@ def compute_stretch(u: d.Function, aInner: float, bInner: float):
     V_scalar_coords = V_scalar.tabulate_dof_coordinates()
     avec = a_scalar.vector()[:]
     for i in range(len(avec)):
-        a_cur = a_vector(V_scalar_coords[i])
-        avec[i] = np.sqrt(a_cur[0]**2 + a_cur[1]**2 + a_cur[2]**2)
+        cur_coord = V_scalar_coords[i]
+        avec[i] = calc_stretch_NP(cur_coord[0],cur_coord[1],cur_coord[2]+z0Inner,
+                 aInner,bInner,z0Inner,xNP,yNP,nanopillars)
+        # a_cur = a_vector(V_scalar_coords[i])
+        # avec[i] = np.sqrt(a_cur[0]**2 + a_cur[1]**2 + a_cur[2]**2)
     a_scalar.vector().set_local(avec)
     a_scalar.vector().apply("insert")
     a_nuc = a_scalar
@@ -283,7 +293,6 @@ def create_3dcell(
         comm: MPI communicator to create the mesh with
         verbose: If true print gmsh output, else skip
         return_curvature: If true, return curvatures as a vertex mesh function
-        thetaExpr: String defining the theta dependence of the outer shape
     Returns:
         Tuple (mesh, facet_marker, cell_marker)
     Or, if return_curvature = True, Returns:
@@ -295,7 +304,7 @@ def create_3dcell(
     zOffset = nanopillar_height
     xSteric = 0.05
     xCurv = 0.2 
-    rValsOuter, zValsOuter, rValsInner, zValsInner, innerParams, u_nuc, rScale = get_shape_coords(
+    rValsOuter, zValsOuter, rValsInner, zValsInner, innerParams, u_nuc, rScale, outParam = get_shape_coords(
                                             contactRad, nanopillars, nuc_compression)
 
     rValsOuterClosed = np.concatenate((rValsOuter, -rValsOuter[::-1]))
@@ -463,24 +472,31 @@ def create_3dcell(
         # inner_shape = gmsh.model.occ.revolve([(2, inner_plane_tag)], 0, 0, 0, 0, 0, 1, 2*np.pi*sym_fraction)
 
         if np.all(np.array(nanopillars) != 0):
+            xMax = np.ceil(aInner / nanopillar_spacing) * nanopillar_spacing
+            xNP = np.arange(-xMax, xMax+1e-12, nanopillar_spacing)
+            yNP = np.arange(-xMax, xMax+1e-12, nanopillar_spacing)
+            xNP, yNP = np.meshgrid(xNP, yNP)
+            xNP = xNP.flatten()
+            yNP = yNP.flatten()
             inner_spline_list = []
             # line_list_list = []
             edge_surf_list = []
             # cut_vol_list = []
             # first_points_list = []
             if u_nuc == []:
-                u_top, u_bottom = [0.,0.,0.], [0.,0.,0.]
+                u_top, u_bottom = 0, 0 #[0.,0.,0.], [0.,0.,0.]
             else:
-                u_top = u_nuc(0.0, 0.0, zValsInner[0]-z0Inner)
-                u_bottom = u_nuc(0.0, 0.0, zValsInner[-1]-z0Inner)
-            top_point = gmsh.model.occ.add_point(0.0, 0.0, zValsInner[0]+u_top[2])
-            bottom_point = gmsh.model.occ.add_point(0.0, 0.0, zValsInner[-1]+u_bottom[2])
+                u_top = 0.0 #u_nuc(0.0, 0.0, zValsInner[0]-z0Inner)
+                u_bottom = calc_def_NP(0.0, 0.0, zValsInner[-1], aInner, bInner, z0Inner, xNP, yNP, nanopillars)
+            top_point = gmsh.model.occ.add_point(0.0, 0.0, zValsInner[0]+u_top)
+            bottom_point = gmsh.model.occ.add_point(0.0, 0.0, zValsInner[-1]+u_bottom)
             num_theta = np.ceil(321*sym_fraction)
             thetaVecInner = np.linspace(0, 2*np.pi*sym_fraction, int(num_theta))
             sValsInner = np.zeros_like(rValsInner)
             for i in range(1,len(rValsInner)): # define arc length
                 sValsInner[i] = sValsInner[i-1] + np.sqrt((rValsInner[i]-rValsInner[i-1])**2 + 
                                                           (zValsInner[i]-zValsInner[i-1])**2)
+            profileList = []
             for j in range(len(thetaVecInner)):
                 thetaCur = thetaVecInner[j]
                 if j == (len(thetaVecInner)-1) and sym_fraction == 1:
@@ -498,10 +514,11 @@ def create_3dcell(
                         yRef = rValsInnerCur[i]*np.sin(thetaCur)
                         zRef = zValsInnerCur[i]
                         if u_nuc == []:
-                            uCur = [0, 0, 0]
+                            uCur = 0#[0, 0, 0]
                         else:
-                            uCur = u_nuc(xRef/rScale, yRef/rScale, zRef-z0Inner)
-                        zValsInnerCur[i] += uCur[2]
+                            uCur = calc_def_NP(xRef, yRef, zRef, aInner, bInner, z0Inner, xNP, yNP, nanopillars)
+                            # uCur = u_nuc(xRef/rScale, yRef/rScale, zRef-z0Inner)
+                        zValsInnerCur[i] += uCur#[2]
                         if i > 0:
                             dsCur = np.sqrt((rValsInnerCur[i]-rValsInnerCur[i-1])**2 +
                                             (zValsInnerCur[i]-zValsInnerCur[i-1])**2)
@@ -511,7 +528,6 @@ def create_3dcell(
                     sValsCur = sFirstHalf
                     dsBig = sValsInner[-1] / 200
                     dsSmall = sValsInner[-1] / 200
-                    ds = dsBig
                     # determine where we are in theta direction - where do we potentially intersect nanopillars?
                     sortIdx = np.argsort(xTest)
                     xTest = xTest[sortIdx]
@@ -522,8 +538,8 @@ def create_3dcell(
                                         (yTest[n]*np.cos(thetaCur)**2 - xTest[n]*np.sin(thetaCur)*np.cos(thetaCur))**2)
                         rCur = xTest[n]*np.cos(thetaCur) + yTest[n]*np.sin(thetaCur)
                         assert np.all(np.diff(rValsInnerCur[-1:half_idx:-1]) > 0) # required for interpolation here
-                        zCur = np.interp(rCur, rValsInnerCur[-1:half_idx:-1], zValsInnerCur[-1:half_idx:-1]) # can interpolate because second half has r strictly decreasing (flip order for interp)
-                        if dCur < nanopillar_rad + 2*xSteric and zCur < nanopillar_height + 0.2:
+                        zOrigCur = np.interp(rCur, rValsInnerCur[-1:half_idx:-1], zValsInner[-1:half_idx:-1]) # can interpolate because second half has r strictly decreasing (flip order for interp)
+                        if dCur < nanopillar_rad + 2*xSteric and zOrigCur < nanopillar_height + 0.2:
                             quad_roots = np.roots([1, -2*(xTest[n]*np.cos(thetaCur)+yTest[n]*np.sin(thetaCur)), 
                                               xTest[n]**2 + yTest[n]**2 - (nanopillar_rad+2*xSteric)**2])
                             if not np.all(np.isreal(quad_roots)):
@@ -540,6 +556,8 @@ def create_3dcell(
                     rCross = np.array(rCross)
                     rCross = np.sort(rCross)[-1::-1]
                     sCross = np.zeros_like(rCross)
+                    # if not np.any(rCross < 0):
+                    #     print("Center pillar should be included, what...?")
                     if len(rCross) == 0:
                         # then no intersections with nanopillars for this value of theta
                         num_lower = np.ceil((sValsInnerCur[-1]-sValsInnerCur[half_idx])/dsBig)
@@ -607,12 +625,8 @@ def create_3dcell(
                     xSteric = 0.05
                     # nanopillar_radmod = nanopillar_rad + 2*xSteric # to avoid collision with PM
                     # define nanopillar locations
-                    xMax = np.ceil(aInner / nanopillar_spacing) * nanopillar_spacing
-                    xNP = np.arange(-xMax, xMax+1e-12, nanopillar_spacing)
-                    yNP = np.arange(-xMax, xMax+1e-12, nanopillar_spacing)
-                    xNP, yNP = np.meshgrid(xNP, yNP)
-                    xNP = xNP.flatten()
-                    yNP = yNP.flatten()
+                    profileList.append([list(rValsCur), list(zValsCur)])
+                    np.savetxt(f"theta{j}.txt", np.array([rValsCur, zValsCur]))
                     for i in range(len(rValsCur)):
                         if i == 0:
                             inner_tag_list.append(top_point)
@@ -638,7 +652,7 @@ def create_3dcell(
                     # if j==0 or j==len(thetaVecInner)-1:
                     #     inner_spline_list.append(inner_line_list)
                     # else:
-                    inner_spline_list.append(gmsh.model.occ.add_bspline(inner_tag_list, degree=1))
+                    inner_spline_list.append(gmsh.model.occ.add_bspline(inner_tag_list))
                     # first_points_list.append(inner_tag_list[0])
                 if j > 0:
                     # if j==1:
@@ -688,13 +702,13 @@ def create_3dcell(
                 back_loop = gmsh.model.occ.add_curve_loop([symm_line, inner_spline_list[-1]])
                 # back_loop = gmsh.model.occ.add_curve_loop([symm_line, *line_list_list[-1]])
                 back_surf = gmsh.model.occ.add_plane_surface([back_loop])
-                cur_surf_loop = gmsh.model.occ.add_surface_loop([front_surf, back_surf, *edge_surf_list])
-                inner_shape = gmsh.model.occ.add_volume([cur_surf_loop])
+                inner_surf_loop = gmsh.model.occ.add_surface_loop([front_surf, back_surf, *edge_surf_list])
+                inner_shape = gmsh.model.occ.add_volume([inner_surf_loop])
                 inner_shape = [(3, inner_shape)]
             else:
                 # now define total inner shape from edge_segments and edge_surf_list    
-                cur_surf_loop = gmsh.model.occ.add_surface_loop(edge_surf_list)
-                inner_shape = gmsh.model.occ.add_volume([cur_surf_loop])
+                inner_surf_loop = gmsh.model.occ.add_surface_loop(edge_surf_list)
+                inner_shape = gmsh.model.occ.add_volume([inner_surf_loop])
                 inner_shape = [(3, inner_shape)]
         else:
             # Inner shape is just a spheroid
@@ -740,6 +754,9 @@ def create_3dcell(
             outer_shell[0][0], outer_shell_tags, tag=outer_marker
         )
         gmsh.model.add_physical_group(inner_shell[0][0], inner_shell_tags, tag=interface_marker)
+        # if nuc_compression > 0:
+        #     for i in range(len(inner_shell_tags)):
+        #         gmsh.model.mesh.setSmoothing(2, inner_shell_tags[i], 2)
 
         # Physical markers for
         all_volumes = [tag[1] for tag in outer_shape_map]
@@ -829,7 +846,7 @@ def create_3dcell(
     #     areas[c.index()] = np.sqrt(area_vec[0]**2 + area_vec[1]**2 + area_vec[2]**2) / area_orig
     
     if nuc_compression > 0:
-        a_nuc = compute_stretch(u_nuc, aInner, bInner)
+        a_nuc = compute_stretch(u_nuc, aInner, bInner, nanopillars, z0Inner)
         d.ALE.move(u_nuc.function_space().mesh(), u_nuc)
     else:
         a_nuc = []
@@ -885,7 +902,7 @@ def create_3dcell(
                         cosCur = (xCurv - zVal)/xCurv
                         sinCur = np.sqrt(1 - cosCur**2)
                         cm = 1/xCurv
-                        cp = sinCur / (nanopillar_rad + xSteric + xCurv*(1-sinCur))
+                        cp = -sinCur / (nanopillar_rad + xSteric + xCurv*(1-sinCur))
                         rVal = nanopillar_rad + xSteric + xCurv - xCurv*sinCur
                         cpAlt = (rVal - (nanopillar_rad + xSteric + xCurv)) / (rVal*xCurv)
                         curv_markers.set_value(v.index(), (cm+cp)/2)
@@ -903,15 +920,18 @@ def create_3dcell(
                     curv_markers.set_value(v.index(), curvFcnOuter(rVal, 0, zVal))
             elif mf2.array()[f.index()] == interface_marker:
                 for v in d.vertices(f):
-                    rVal = np.sqrt(v.midpoint().x()**2 + v.midpoint().y()**2)
+                    xVal = v.midpoint().x()
+                    yVal = v.midpoint().y()
+                    rVal = np.sqrt(xVal**2 + yVal**2)
                     zVal = v.midpoint().z()
                     if nuc_compression > 0:
-                        print("WARNING: Cannot automatically compute nuclear curvatures in this deformation case currently")
-
-                    curv_val = compute_curvature_ellipse_alt(np.array([rVal]), np.array([zVal]), 
+                        curv_val = calc_curv_NP(xVal,yVal,zVal,aInner,bInner,z0Inner,xNP,yNP,nanopillars)
+                        curv_markers.set_value(v.index(), curv_val)
+                    else:
+                        curv_val = compute_curvature_ellipse_alt(np.array([rVal]), np.array([zVal]), 
                                                                 aInner, bInner, 
                                                                 r0Inner, z0Inner, incl_parallel=True)
-                    curv_markers.set_value(v.index(), curv_val[0])
+                        curv_markers.set_value(v.index(), curv_val[0])
         return (dmesh, mf2, mf3, substrate_markers, curv_markers, u_nuc, a_nuc)
     else:
         return (dmesh, mf2, mf3, substrate_markers, u_nuc, a_nuc)
@@ -926,6 +946,7 @@ def create_substrate(
     verbose: bool = False,
     nanopillars: Tuple[float, float, float] = [0, 0, 0],
     use_tmp: bool = False,
+    contact_rad: float = np.inf,
 ) -> Tuple[d.Mesh, d.MeshFunction, d.MeshFunction]:
     """
     Creates a mesh of the substrate.
@@ -950,18 +971,25 @@ def create_substrate(
         xTest = np.reshape(xTest, (len(xTest)**2))
         yTest = np.reshape(yTest, (len(yTest)**2))
         for i in range(len(xTest)):
-            np_shape = gmsh.model.occ.add_cylinder(xTest[i], yTest[i], 0.0, 0, 0, nanopillar_height, nanopillar_rad)
-            # np_shape_tags = []
-            # for j in range(len(np_shape)):
-            #     if np_shape[j][0] == 3:  # pull out tags associated with 3d objects
-            #         np_shape_tags.append(np_shape[j][1])
-            # assert len(np_shape_tags) == 1  # should be just one 3D body from the full revolution
-            (outer_shape, outer_shape_map) = gmsh.model.occ.fuse(outer_shape, [(3, np_shape)])
-            outer_shape_list = []
-            # for j in range(len(outer_shape_map)):
-            #     if outer_shape_map[j]!=[]:
-            #         outer_shape_list.append(outer_shape_map[j][0])
-            # outer_shape = outer_shape_list
+            rTest = np.sqrt(xTest[i]**2 + yTest[i]**2)
+            xCurv = 0.2
+            xSteric = 0.05
+            keep_logic1 = rTest <= contact_rad-nanopillar_rad-xCurv-xSteric
+            keep_logic2 = rTest > contact_rad+nanopillar_rad
+            keep_logic = np.logical_or(keep_logic1, keep_logic2)
+            if keep_logic:
+                np_shape = gmsh.model.occ.add_cylinder(xTest[i], yTest[i], 0.0, 0, 0, nanopillar_height, nanopillar_rad)
+                # np_shape_tags = []
+                # for j in range(len(np_shape)):
+                #     if np_shape[j][0] == 3:  # pull out tags associated with 3d objects
+                #         np_shape_tags.append(np_shape[j][1])
+                # assert len(np_shape_tags) == 1  # should be just one 3D body from the full revolution
+                (outer_shape, outer_shape_map) = gmsh.model.occ.fuse(outer_shape, [(3, np_shape)])
+                outer_shape_list = []
+                # for j in range(len(outer_shape_map)):
+                #     if outer_shape_map[j]!=[]:
+                #         outer_shape_list.append(outer_shape_map[j][0])
+                # outer_shape = outer_shape_list
 
     outer_shape_tags = []
     for i in range(len(outer_shape)):
@@ -1082,7 +1110,7 @@ def create_2Dcell(
     nuc_vol = (4/3)*np.pi*5.3*5.3*2.4/nucScaleFactor**3
     zOffset = 0
     targetVol = 480/scaleFactor**3 *4 + nuc_vol
-    rValsOuter, zValsOuter = shape_adj_axisymm(refParam, zOffset, targetVol)
+    rValsOuter, zValsOuter, outParam = shape_adj_axisymm(refParam, zOffset, targetVol)
     rValsOuter, zValsOuter = dilate_axisymm(rValsOuter, zValsOuter, targetVol)
     zMax = max(zValsOuter)
 
@@ -1467,7 +1495,7 @@ def shape_adj_axisymm(paramVec, zOffset, volTarget):
         magChange = 1 + (magChange-1)*np.abs((volTarget-volCur)/(volCur-volPrev))
         volPrev = volCur
         
-    return (rVec, zVec)
+    return (rVec, zVec, paramVec)
 
 def get_inner(zOffset, zMax, scaleFactor, nuc_compression, aMod=0, bMod=0):
     # zMid = (zOffset + zMax) / 2
@@ -1679,3 +1707,119 @@ def compute_curvature_ellipse_alt(
             curv_alt[i] = num / den
     # assert np.all(curv_alt == curv_vals)
     return curv_vals
+
+def calc_curv_NP(x,y,z,
+                 a,b,z0Inner,xNP,yNP,nanopillars):
+    radNP, hNP, pNP = nanopillars[:]
+    xSteric = 0.05
+    radNP += 2*xSteric # to avoid collision with PM
+    hNP += 0.2
+    zNP = hNP * np.ones_like(xNP)
+    dist_vals = np.sqrt(np.power(xNP-x, 2) + np.power(yNP-y, 2)) 
+    alpha = np.sqrt(1 - (x**2+y**2)/a**2)
+    zCur = z0Inner - b*alpha
+    hex = b*x/(a**2 * alpha)
+    hey = b*y/(a**2 * alpha)
+    hexy = b*x*y / (a**4 * alpha**3)
+    hexx = b*x**2 / (a**4 * alpha**3) + b / (a**2 * alpha)
+    heyy = b*y**2 / (a**4 * alpha**3) + b / (a**2 * alpha)
+    hx = hex
+    hy = hey
+    hxy = hexy
+    hxx = hexx
+    hyy = heyy
+    for i in range(len(xNP)):
+        uRef = zNP[i] - zCur
+        if z < zNP[i]+1e-3:
+            dxCur = x - xNP[i]
+            dyCur = y - yNP[i]
+            rlocal = np.sqrt(dxCur**2 + dyCur**2)
+            drCur = rlocal - radNP
+            sigma1 = np.exp(-(drCur/0.2)**2)
+            if dist_vals[i] < radNP+1e-3:
+                curv_val = 0
+                return curv_val
+            else:
+                hx += -hex*sigma1 - 2*uRef*drCur*dxCur*sigma1/(0.2**2 * rlocal)
+                hy += -hey*sigma1 - 2*uRef*drCur*dyCur*sigma1/(0.2**2 * rlocal)
+                xyCur = (-hexy*sigma1 + 2*hex*drCur*dyCur*sigma1/(0.2**2 * rlocal) + 2*hey*drCur*dxCur*sigma1/(0.2**2 * rlocal) +
+                        (2*sigma1*uRef*drCur*dxCur*dyCur/(0.2**2 * rlocal**2))*(2*drCur/0.2**2 + 1/rlocal) - 
+                        2*uRef*dxCur*dyCur*sigma1/(0.2**2 * rlocal**2))
+                xyCurAlt = (-hexy*sigma1 + 2*hey*drCur*dxCur*sigma1/(0.2**2 * rlocal) + 2*hex*drCur*dyCur*sigma1/(0.2**2 * rlocal) +
+                        (2*sigma1*uRef*drCur*dxCur*dyCur/(0.2**2 * rlocal**2))*(2*drCur/0.2**2 + 1/rlocal) - 
+                        2*uRef*dxCur*dyCur*sigma1/(0.2**2 * rlocal**2))
+                assert np.isclose(xyCur, xyCurAlt), f"{xyCur} vs {xyCurAlt}"
+                hxy += xyCurAlt
+                hxx += (-hexx*sigma1 + 4*hex*drCur*dxCur*sigma1/(0.2**2 * rlocal) + 
+                        (2*sigma1*uRef*drCur*dxCur**2/(0.2**2 * rlocal**2))*(2*drCur/0.2**2 + 1/rlocal) - 
+                        2*uRef*dxCur**2*sigma1/(0.2**2 * rlocal**2) - 2*uRef*drCur*sigma1/(0.2**2 * rlocal))
+                hyy += (-heyy*sigma1 + 4*hey*drCur*dyCur*sigma1/(0.2**2 * rlocal) + 
+                        (2*sigma1*uRef*drCur*dyCur**2/(0.2**2 * rlocal**2))*(2*drCur/0.2**2 + 1/rlocal) - 
+                        2*uRef*dyCur**2*sigma1/(0.2**2 * rlocal**2) - 2*uRef*drCur*sigma1/(0.2**2 * rlocal))
+    num = (1+hy**2)*hxx - 2*hx*hy*hxy + (1+hx**2)*hyy
+    den = 2*(1 + hx**2 + hy**2)**(3/2)
+    curv_val = num/den   
+    return curv_val
+
+def calc_stretch_NP(x,y,zDef,
+                 a,b,z0Inner,xNP,yNP,nanopillars):
+    radNP, hNP, pNP = nanopillars[:]
+    xSteric = 0.05
+    radNP += 2*xSteric # to avoid collision with PM
+    hNP += 0.2
+    zNP = hNP * np.ones_like(xNP)
+    dist_vals = np.sqrt(np.power(xNP-x, 2) + np.power(yNP-y, 2)) 
+    alpha = np.sqrt(1 - (x**2+y**2)/a**2)
+    zCur = z0Inner - b*alpha
+    z = zCur - z0Inner
+    N = np.sqrt((x**2+y**2)/a**4 + z**2/b**4)
+    uzx = 0
+    uzy = 0
+    uzz = 0
+    for i in range(len(xNP)):
+        uRef = zNP[i] - zCur
+        if zDef < zNP[i]+1e-6:
+            dxCur = x - xNP[i]
+            dyCur = y - yNP[i]
+            rlocal = np.sqrt(dxCur**2 + dyCur**2)
+            drCur = rlocal - radNP
+            sigma1 = np.exp(-(drCur/0.2)**2)
+            if dist_vals[i] < radNP:
+                stretch_val = np.abs(z)/(N*b**2)
+                return stretch_val
+            else:
+                uzx += -2*(uRef*dxCur*drCur/(rlocal*0.2**2)) * sigma1
+                uzy += -2*(uRef*dyCur*drCur/(rlocal*0.2**2)) * sigma1
+                uzz += -sigma1
+    stretch_val = ((1+uzz)/N)*np.sqrt((x/(a**2) + z*uzx/(b**2 * (1+uzz)))**2 +
+                                      (y/(a**2) + z*uzy/(b**2 * (1+uzz)))**2 +
+                                      (z/(b**2 * (1+uzz)))**2)
+
+    return stretch_val
+
+
+def calc_def_NP(x,y,z,a,b,z0Inner,xNP,yNP,nanopillars):
+    radNP, hNP, pNP = nanopillars[:]
+    xSteric = 0.05
+    radNP += 2*xSteric # to avoid collision with PM
+    hNP += 0.2
+    zNP = hNP * np.ones_like(xNP)
+    dist_vals = np.sqrt(np.power(xNP-x, 2) + np.power(yNP-y, 2)) 
+    alpha = np.sqrt(1 - (x**2+y**2)/a**2)
+    zCur = z0Inner - b*alpha
+    uz = 0
+    for i in range(len(xNP)):
+        uRef = zNP[i] - zCur
+        if z < zNP[i]+1e-6:
+            dxCur = x - xNP[i]
+            dyCur = y - yNP[i]
+            rlocal = np.sqrt(dxCur**2 + dyCur**2)
+            drCur = rlocal - radNP
+            sigma1 = np.exp(-(drCur/0.2)**2)
+            if dist_vals[i] < radNP:
+                uz = uRef
+                return uz
+            else:
+                uz += uRef*sigma1
+
+    return uz
