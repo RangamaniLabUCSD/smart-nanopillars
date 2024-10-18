@@ -1,3 +1,5 @@
+# This code is used essentially unmodified from the smart-comp-sci repo
+
 import dolfin as d
 from pathlib import Path
 import numpy as np

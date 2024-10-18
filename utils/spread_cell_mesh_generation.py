@@ -1,5 +1,5 @@
 """
-Functions to create meshes for mechanotransduction example
+Functions to create meshes for cell mechanotransduction on nanopillars
 """
 
 from typing import Tuple
@@ -293,7 +293,6 @@ def create_3dcell(
         comm: MPI communicator to create the mesh with
         verbose: If true print gmsh output, else skip
         return_curvature: If true, return curvatures as a vertex mesh function
-        thetaExpr: String defining the theta dependence of the outer shape
     Returns:
         Tuple (mesh, facet_marker, cell_marker)
     Or, if return_curvature = True, Returns:
@@ -491,7 +490,7 @@ def create_3dcell(
                 u_bottom = calc_def_NP(0.0, 0.0, zValsInner[-1], aInner, bInner, z0Inner, xNP, yNP, nanopillars)
             top_point = gmsh.model.occ.add_point(0.0, 0.0, zValsInner[0]+u_top)
             bottom_point = gmsh.model.occ.add_point(0.0, 0.0, zValsInner[-1]+u_bottom)
-            num_theta = np.ceil(161*sym_fraction)
+            num_theta = np.ceil(321*sym_fraction)
             thetaVecInner = np.linspace(0, 2*np.pi*sym_fraction, int(num_theta))
             sValsInner = np.zeros_like(rValsInner)
             for i in range(1,len(rValsInner)): # define arc length
@@ -527,9 +526,8 @@ def create_3dcell(
                     half_idx = int(np.floor(len(rValsInnerCur)/2))
                     sFirstHalf = np.linspace(0.0, sValsInnerCur[half_idx], 21)
                     sValsCur = sFirstHalf
-                    dsBig = sValsInner[-1] / 50
-                    dsSmall = sValsInner[-1] / 50
-                    ds = dsBig
+                    dsBig = sValsInner[-1] / 200
+                    dsSmall = sValsInner[-1] / 200
                     # determine where we are in theta direction - where do we potentially intersect nanopillars?
                     sortIdx = np.argsort(xTest)
                     xTest = xTest[sortIdx]
@@ -654,7 +652,7 @@ def create_3dcell(
                     # if j==0 or j==len(thetaVecInner)-1:
                     #     inner_spline_list.append(inner_line_list)
                     # else:
-                    inner_spline_list.append(gmsh.model.occ.add_bspline(inner_tag_list, degree=5))
+                    inner_spline_list.append(gmsh.model.occ.add_bspline(inner_tag_list))
                     # first_points_list.append(inner_tag_list[0])
                 if j > 0:
                     # if j==1:

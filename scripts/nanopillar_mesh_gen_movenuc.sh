@@ -14,4 +14,3 @@ do
 --nuc-compression ${indentArray[idx]}
 done
 echo "Done."
-echo "Done."
