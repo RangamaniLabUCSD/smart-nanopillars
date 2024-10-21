@@ -19,7 +19,7 @@ tscc_template = dedent(
 
 module load singularitypro/3.11
 module load mpich/ge/gcc/64/3.4.2
-cd /tscc/nfs/home/eafrancis/gitrepos/smart-comp-sci/scripts
+cd /tscc/nfs/home/eafrancis/gitrepos/smart-nanopillars/scripts
 
 SCRATCH_DIRECTORY=/tscc/lustre/ddn/scratch/eafrancis/nanopillar-sims
 mkdir -p ${{SCRATCH_DIRECTORY}}

@@ -24,10 +24,6 @@ commands = {
         msg="Run nuclear transport simulation",
         script=runner.mechanotransduction_example_nuc_only
     ),
-    "mechanotransduction-postprocess": Command(
-        msg="Postprocess mechanotransduction example",
-        script=runner.postprocess_mechanotransduction
-    ),
 }
 
 def main():
