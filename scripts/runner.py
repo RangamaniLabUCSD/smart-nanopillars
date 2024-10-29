@@ -4,13 +4,12 @@ from textwrap import dedent
 from pathlib import Path
 import subprocess as sp
 
-# could specify memory below in SLURM script as #SBATCH --mem=4G
 tscc_template = dedent(
     """#!/bin/bash
 #SBATCH --job-name="{job_name}"
 #SBATCH --partition=platinum
 #SBATCH --time=100:00:00
-#SBATCH --ntasks={ntasks}
+#SBATCH --ntasks=1
 #SBATCH --output=%j-%x-stdout.txt
 #SBATCH --error=%j-%x-stderr.txt
 #SBATCH --account=csd786
@@ -45,8 +44,6 @@ def run(
     submit_tscc: bool,
     dry_run: bool = False,
     job_name: str = "",
-    ntasks: int = 1,
-    partition: str = "defq",
 ):
     in_args = list(map(str, args))
     args_str = " ".join(in_args)
@@ -57,7 +54,7 @@ def run(
     if submit_tscc:
         template = tscc_template
     else:
-        sp.run(["mpirun", "-n", str(ntasks), sys.executable, script, *in_args])
+        sp.run([sys.executable, script, *in_args])
         return
 
     job_file = Path("tmp_job.sbatch")
@@ -66,8 +63,6 @@ def run(
             job_name=job_name,
             script=script,
             args=args_str,
-            ntasks=ntasks,
-            partition=partition,
         )
     )
     sp.run(["sbatch", job_file.as_posix()])
@@ -76,7 +71,6 @@ def run(
 
 def preprocess_mech_mesh(
     mesh_folder: Path,
-    shape: str,
     hEdge: float,
     hInnerEdge: float,
     nanopillar_radius: float,
@@ -90,8 +84,6 @@ def preprocess_mech_mesh(
     args = [
         "--mesh-folder",
         Path(mesh_folder).as_posix(),
-        "--shape",
-        shape,
         "--hEdge",
         hEdge,
         "--hInnerEdge",
@@ -116,6 +108,7 @@ def preprocess_mech_mesh(
         .resolve()
         .as_posix()
     )
+    # currently do not generate meshes on cluster, only locally (submit_tscc = False)
     run(
         args=args,
         script=script,
@@ -129,18 +122,14 @@ def mechanotransduction_example(
     time_step: float,
     e_val: float,
     z_cutoff: float,
-    axisymmetric: bool,
-    well_mixed: bool,
     dry_run: bool = False,
     submit_tscc: bool = False,
-    ntasks: int = 1,
-    partition: str = "defq",
     curv_sens: float = 0.0,
-    reaction_rate_on_np = 1.0,
-    npc_slope = 0.0,
-    a0_npc = 0.0,
-    nuc_compression = 0.0,
-    WASP_rate = 0.0,
+    reaction_rate_on_np: float = 1.0,
+    npc_slope: float = 0.0,
+    a0_npc: float = 0.0,
+    nuc_compression: float = 0.0,
+    WASP_rate: float = 0.0,
     **kwargs,
 ):
     args = [
@@ -165,10 +154,6 @@ def mechanotransduction_example(
         "--WASP-rate",
         WASP_rate,
     ]
-    if axisymmetric:
-        args.append("--axisymmetric")
-    if well_mixed:
-        args.append("--well-mixed")
 
     args.extend(["--outdir", Path(outdir).as_posix()])
 
@@ -184,8 +169,6 @@ def mechanotransduction_example(
         dry_run=dry_run,
         script=script,
         submit_tscc=submit_tscc,
-        ntasks=ntasks,
-        partition=partition,
     )
 
 def mechanotransduction_example_nuc_only(
@@ -195,15 +178,13 @@ def mechanotransduction_example_nuc_only(
     time_step: float,
     dry_run: bool = False,
     submit_tscc: bool = False,
-    ntasks: int = 1,
-    partition: str = "defq",
-    a0_npc = 0.0,
-    nuc_compression = 0.0,
-    pore_size = 0.5,
-    pore_loc = 0.0,
-    pore_rate = 10.0,
-    transport_rate = 10.0,
-    transport_ratio = 1.0,
+    a0_npc: float = 0.0,
+    nuc_compression: float = 0.0,
+    pore_size: float = 0.5,
+    pore_loc: float = 0.0,
+    pore_rate: float = 10.0,
+    transport_rate: float = 10.0,
+    transport_ratio: float = 1.0,
     **kwargs,
 ):
     args = [
@@ -243,44 +224,6 @@ def mechanotransduction_example_nuc_only(
         dry_run=dry_run,
         script=script,
         submit_tscc=submit_tscc,
-        ntasks=ntasks,
-        partition=partition,
-    )
-
-
-def postprocess_mechanotransduction(
-    results_folder: Path,
-    output_folder: Path,
-    skip_if_processed: bool = False,
-    use_tex: bool = False,
-    dry_run: bool = False,
-    format: str = "png",
-    **kwargs,
-):
-    args = [
-        "--results-folder",
-        Path(results_folder).as_posix(),
-        "--output-folder",
-        Path(output_folder).as_posix(),
-        "--format",
-        format,
-    ]
-    if skip_if_processed:
-        args.append("--skip-if-processed")
-    if use_tex:
-        args.append("--use-tex")
-
-    script = (
-        (here / ".." / "model-files" / "postprocess.py")
-        .absolute()
-        .resolve()
-        .as_posix()
-    )
-    run(
-        args=args,
-        dry_run=dry_run,
-        script=script,
-        submit_tscc=False,
     )
 
 

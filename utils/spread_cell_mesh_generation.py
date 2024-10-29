@@ -7,8 +7,7 @@ import pathlib
 import numpy as np
 import dolfin as d
 from mpi4py import MPI
-from sympy.parsing.sympy_parser import parse_expr
-from smart.mesh_tools import implicit_curve, compute_curvature, gmsh_to_dolfin, facet_topology
+from smart.mesh_tools import implicit_curve, gmsh_to_dolfin, facet_topology
 
 def create_3dcell(
     contactRad: float = 10.0,
@@ -26,19 +25,15 @@ def create_3dcell(
     use_tmp: bool = False,
     sym_fraction: float = 1.0,
     nuc_compression: float = 0.0,
-) -> Tuple[d.Mesh, d.MeshFunction, d.MeshFunction]:
+) -> Tuple[d.Mesh, d.MeshFunction, d.MeshFunction, d.MeshFunction, 
+           d.MeshFunction, d.Function, d.Function]:
     """
     Creates a 3d cell mesh.
-    The inner contour (e.g. nucleus or other organelle) is defined
+    The inner contour representing the nucleus is defined
     implicitly through innerExpr, which is rotated about the z axis
     to form an axisymmetric shape (e.g. unit sphere centered at (0, 2) 
     defined by innerExpr = "r**2 + (z-2)**2 - 1")
-    The outer cell contour is defined in terms of 
-    cylindrical coordinates r, z, and theta.
-    It is assumed that r can be expressed as a function of z and theta.
-    If r = r1(z)T(theta), r1 is defined implicitly by outerExpr or innerExpr 
-    (e.g. circle with radius 5 defined by outerExpr = "r**2 + z**2 - 25")
-    and T is defined by thetaExpr (for an axisymmetric geometry, thetaExpr = "1")
+    The outer cell contour is also defined by an expression of r and z.
     It is assumed that substrate is present at z = 0, so if the curve extends
     below z = 0 , there is a sharp cutoff.
 
@@ -62,9 +57,17 @@ def create_3dcell(
         nuc_compression: nuclear indentation in microns
                          if negative, this results in a vertical shift of the nucleus
     Returns:
-        Tuple (mesh, facet_marker, cell_marker)
+        Tuple (dmesh, mf2, mf3, substrate_markers, u_nuc, a_nuc)
     Or, if return_curvature = True, Returns:
-        Tuple (mesh, facet_marker, cell_marker, curvature_marker)
+        Tuple (dmesh, mf2, mf3, substrate_markers, curv_markers, u_nuc, a_nuc)
+    Where
+        dmesh: dolfin mesh for whole geometry
+        mf2: mesh facet markers (surface mesh function)
+        mf3: mesh cell markers (volume mesh function)
+        substrate_markers: marks location of substrate (incl nanopillars) (surface mesh function)
+        curv_markers: 0D mesh function (points) defining curvature at each vertex
+        u_nuc: dolfin function defining nuclear deformations over reference ellipsoid
+        a_nuc: dolfin function defining nuclear envelope stretch over reference ellipsoid
     """
     import gmsh
     
@@ -719,11 +722,6 @@ def get_u_nuc(zOffset, zMax, nucScaleFactor, nuc_compression, nanopillars):
                 coords_full[i+1] += u_ellipsoid_vec[i:i+3]
                 coords_full[i+2] += u_ellipsoid_vec[i:i+3]
         for i in range(0,len(coords_full),3):
-            # if (np.sqrt(coords_full[i,0]**2 + coords_full[i,1]**2) < aInner and
-            #     coords_full[i,2] < 0):
-            #     uvec[i:i+3] = np_displ(coords_full[i,:], xNP, yNP, [zNP], nanopillar_rad)
-            # else:
-            #     uvec[i:i+3] = [0,0,0]
             uvec[i:i+3] = np_displ(coords_full[i,:], xNP, yNP, [zNP], nanopillar_rad)
             dist_vals = np.sqrt(np.power(xNP-coords_full[i,0], 2) + np.power(yNP-coords_full[i,1], 2))
             if min(dist_vals) < nanopillar_rad and min(dist_vals) > nanopillar_rad-xSteric and coords_full[i,2] < zNP:
@@ -1275,7 +1273,7 @@ def compute_profile(thetaCur, rValsInnerRef, zValsInnerRef, sValsInnerRef,
     if len(rCross) == 0:
         # then no intersections with nanopillars for this value of theta
         num_lower = np.ceil((sValsInnerCur[-1]-sValsInnerCur[half_idx])/dsBig)
-        sLower = np.linspace(sValsInner[half_idx] + dsBig, sValsInnerCur[-1], int(num_lower))
+        sLower = np.linspace(sValsInnerCur[half_idx] + dsBig, sValsInnerCur[-1], int(num_lower))
         sValsCur = np.concatenate((sValsCur, sLower))
     for i in range(len(rCross)):
         if rCross[i] > rValsInnerCur[half_idx+1]: # first intersection occurs in middle of NP
