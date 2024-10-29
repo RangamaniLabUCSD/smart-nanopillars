@@ -1,43 +1,47 @@
 # Scripts
 
-In this folder we provide an entry point for running the simulations.
+In this folder we provide an example scripts for running sets of simulations on an HPC cluster, or locally. These instructions are the framework for argument parsing are directly adapted from the [smart-comp-sci repository](https://github.com/RangamaniLabUCSD/smart-comp-sci/tree/main/scripts).
 
 usage: main.py [-h] [--submit-tscc]
-               {convert-notebooks,mechanotransduction-preprocess,mechanotransduction}
+               {convert-notebooks,mechanotransduction-preprocess,mechanotransduction,mechanotransduction-nuc-only}
 
     convert-notebooks   Convert notebooks to python files
     mechanotransduction-preprocess
                         Preprocess mesh for mechanotransduction example
     mechanotransduction
-                        Run mechanotransduction example
+                        Run mechanotransduction example with cell on nanopillars
+    mechanotransduction-nuc-only
+                        Run mechanotransduction example with cell on nanopillars, only considering YAP/TAZ transport in and out of nucleus
 
-There are currently 5 ways to execute the scripts. 
+Each script has many arguments associated with testing conditions such as nuclear indentation, N-WASP reaction rate, etc. The full list with all default values defined can be found in `mech_parser_args.py` within the `model-files` folder.
+
+There are currently 3 ways to execute the scripts. Examples of such calls can be found in the assorted bash scripts in this folder.
 
 1. By running the script without any additional flags, e.g
     ```
-    python3 main.py mechanotransduction
+    python3 main.py mechanotransduction [args]
     ```
-    will run the script directly as a normal script
-2. You can submit a job to the [`tscc` cluster] (or adjust SLURM script to run on a similar cluster) by passing the `--submit-tscc` flag, e.g
+    will run the script directly as a normal script. `[args]` is a series of arguments giving the specifications for a given simulation. For instance, to specify a nuclear indentation of 2.8, `--nuc-compression 2.8` would be appended.
+2. You can submit a job to an HPC cluster by adjusting the SLURM script in `runner.py` and passing the `--submit-tscc` (or another custom) flag, e.g
     ```
-    python3 main.py --submit-tscc mechanotransduction
+    python3 main.py --submit-tscc mechanotransduction [args]
     ```
+    Rather than running the script directly, this will generate a SLURM job script (see `runner.py`) for submission to an HPC cluster.
 3. You can navigate to the example folders and run the notebooks directly using `jupyter`
 
 
 ## Setup environment 
-All the code in this repository depends on [`smart`](https://rangamanilabucsd.github.io/smart), which in turn depends on the [development version of legacy FEniCs](https://bitbucket.org/fenics-project/dolfin/src/master/). While `smart` is a pure python package and can be easily installed with `pip` (i.e `python3 -m pip install fenics-smart`), the development version of FEniCs can be tricky to install, and we recommend to use [docker](https://www.docker.com) for running the code locally.
+All the code in this repository depends on [`smart`](https://rangamanilabucsd.github.io/smart), which in turn depends on the [development version of legacy FEniCs](https://bitbucket.org/fenics-project/dolfin/src/master/). While `smart` is a pure python package and can be easily installed with `pip` (i.e `python3 -m pip install fenics-smart`), the development version of FEniCs can be tricky to install, and we recommend to use [docker](https://www.docker.com) for running the code locally, or [singularity](https://docs.sylabs.io/guides/3.0/user-guide/installation.html) to run on a cluster. Alternatively, you can setup an environment for running on HPC clusters using Spack as described in the [smart-comp-sci repository](https://github.com/RangamaniLabUCSD/smart-comp-sci/tree/main/scripts).
 
 ### Set up environment using docker
 
 We provide a pre-built docker image containing both the development version of FEniCS and smart which you can pull using 
-FIXME: Add correct tag once we have a version we would like to use (with mass conservation and fixes)
 ```
-docker pull ghcr.io/rangamanilabucsd/smart:TAG
+docker pull ghcr.io/rangamanilabucsd/smart:2.2.3
 ```
 If you prefer to run the code in jupyter notebooks we also provide a docker image for that
 ```
-docker pull ghcr.io/rangamanilabucsd/smart-lab:TAG
+docker pull ghcr.io/rangamanilabucsd/smart-lab:2.2.3
 ```
 You can read more about how to initialize a container and running the code in the [smart documentation](https://rangamanilabucsd.github.io/smart/README.html#installation).
 
@@ -53,14 +57,3 @@ In order to run the scripts on the cluster we need to first convert the notebook
 python3 main.py convert-notebooks
 ```
 inside this folder (called `scripts`)
-
-#### Mechanotransduction example
-**Pre-process**
-```
-python3 main.py mechanotransduction-preprocess --mesh-folder meshes-mechanotransduction --shape circle --hEdge 0.6 --hInnerEdge 0.6 --num-refinements 0
-```
-
-**Running**
-```
-python3 main.py mechanotransduction --mesh-folder meshes-mechanotransduction --time-step 0.01 --e-val 70000000.0 --z-cutoff 70000000.0 --outdir results-mechanotransduction
-```

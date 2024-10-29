@@ -7,7 +7,7 @@ indentArray=\
 for idx in 8 7 6 5 4 3 2 1 0;
 do
     echo "Writing mesh for for indentation=${indentArray[idx]}"
-    python3 main.py mechanotransduction-preprocess --shape circle --hEdge 0.5 --hInnerEdge 0.5 \
+    python3 main.py mechanotransduction-preprocess --hEdge 0.5 --hInnerEdge 0.5 \
 --mesh-folder /root/shared/gitrepos/smart-comp-sci-data/meshes/nanopillars_movenuc/nanopillars_movenuc${indentArray[idx]} \
 --contact-rad 17.45 \
 --nanopillar-radius 0.25 --nanopillar-height 1.0 --nanopillar-spacing 2.5 \

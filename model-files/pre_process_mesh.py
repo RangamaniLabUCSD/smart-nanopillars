@@ -7,13 +7,10 @@ from smart import mesh_tools
 
 from mech_parser_args import (
     add_preprocess_mech_mesh_arguments,
-    Shape,
-    shape2symfraction,
 )
 
 def main(
     mesh_folder: str,
-    shape: Shape,
     hEdge: float = 0.6,
     hInnerEdge: float = 0.6,
     nanopillar_radius: float = 0,
@@ -49,10 +46,6 @@ def main(
     curv_file_name = mesh_folder / "curvatures.xdmf"
     with d.XDMFFile(str(curv_file_name)) as curv_file:
         curv_file.write(curv_markers)
-    # save nuclear deformations if applicable
-    # if nuc_compression > 0:
-    #     u_nuc_file = d.XDMFFile(str(mesh_folder / "u_nuc.xdmf"))
-    #     u_nuc_file.write_checkpoint(u_nuc, "u_nuc", 0)#, d.XDMFFile.Encoding.HDF5, True)
 
 
 if __name__ == "__main__":

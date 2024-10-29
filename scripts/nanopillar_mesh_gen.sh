@@ -27,7 +27,7 @@ do
     # if (${heightArray[idx]}==1.0);
     # then
     echo "Writing mesh for h${heightArray[idx]}_p${pitchArray[idx]}_r${radiusArray[idx]} nanopillars for cellRad=${cellRadArray[idx]}"
-    python3 main.py mechanotransduction-preprocess --shape circle --hEdge 0.5 --hInnerEdge 0.5 \
+    python3 main.py mechanotransduction-preprocess --hEdge 0.5 --hInnerEdge 0.5 \
 --mesh-folder /root/shared/gitrepos/smart-comp-sci-data/meshes/nanopillars_finalCalcCoarse/nanopillars_h${heightArray[idx]}_p${pitchArray[idx]}_r${radiusArray[idx]}_cellRad${cellRadArray[idx]} \
 --contact-rad ${cellRadArray[idx]} \
 --nanopillar-radius ${radiusArray[idx]} --nanopillar-height ${heightArray[idx]} --nanopillar-spacing ${pitchArray[idx]}
