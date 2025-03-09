@@ -693,7 +693,7 @@ def get_u_nuc(zOffset, zMax, nucScaleFactor, nuc_compression, nanopillars):
 
     from smart import mesh_tools
     mesh_ellipsoid, mf2, mf3 = mesh_tools.create_ellipsoids(outerRad=[aInner,aInner,bInner], innerRad=[0,0,0], 
-                                                hEdge=0.1, hInnerEdge=0.5)
+                                                hEdge=0.05, hInnerEdge=0.5)
     
     mesh_bound = d.create_meshview(mf2, 10)
     V_full = d.FunctionSpace(mesh_ellipsoid, d.VectorElement("P", mesh_ellipsoid.ufl_cell(), degree = 1, dim = 3))
