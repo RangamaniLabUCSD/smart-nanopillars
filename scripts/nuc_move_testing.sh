@@ -16,7 +16,7 @@ do
     --time-step 0.01 --e-val 10000000 \
     --outdir /root/scratch/results_nanopillars_movenuc/nanopillars_movenuc${indentArray[idx]}_REDO\
     --reaction-rate-on-np 1 --curv-sens 5 --WASP-rate 0.01 \
-    --a0-npc 5.0 --nuc-compression ${indentArray[idx]}
+    --a0-npc 5.0 --nuc-compression ${indentArray[idx]} --alt-yap-diffusion
     sleep 100
 done
 
