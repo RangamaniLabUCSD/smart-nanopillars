@@ -6,13 +6,12 @@ ytick.labelsize: 10
 figure.figsize: 5,4
 pdf.fonttype: 42
 ps.fonttype: 42
-font.family : sans-serif
-font.sans-serif : Arial
 axes.spines.top: False
 axes.spines.right: False
 legend.loc: best
 errorbar.capsize: 8
 font.family: sans-serif
+font.sans-serif : Arial
 legend.frameon: False
 savefig.dpi: 300
 savefig.format: png

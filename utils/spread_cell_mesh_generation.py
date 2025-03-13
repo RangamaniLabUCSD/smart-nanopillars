@@ -1172,8 +1172,8 @@ def calc_stretch_NP(x,y,zDef,
                 uzx += -2*(uRef*dxCur*drCur/(rlocal*0.2**2)) * sigma1
                 uzy += -2*(uRef*dyCur*drCur/(rlocal*0.2**2)) * sigma1
                 uzz += -sigma1
-    stretch_val = ((1+uzz)/N)*np.sqrt((x/(a**2) + z*uzx/(b**2 * (1+uzz)))**2 +
-                                      (y/(a**2) + z*uzy/(b**2 * (1+uzz)))**2 +
+    stretch_val = ((1+uzz)/N)*np.sqrt((x/(a**2) - z*uzx/(b**2 * (1+uzz)))**2 +
+                                      (y/(a**2) - z*uzy/(b**2 * (1+uzz)))**2 +
                                       (z/(b**2 * (1+uzz)))**2)
 
     return stretch_val
