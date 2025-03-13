@@ -32,7 +32,7 @@ do
         --mesh-folder /root/scratch/meshes/nanopillars_finalCalcCoarse/nanopillars_h${heightArray[idx]}_p${pitchArray[idx]}_r${radiusArray[idx]}_cellRad${cellRadArray[idx]} \
         --time-step 0.01 --e-val ${EModArray[idx]} \
         --outdir /root/scratch/results_nanopillars_withWASP/nanopillars_h${heightArray[idx]}_p${pitchArray[idx]}_r${radiusArray[idx]}_cellRad${cellRadArray[idx]}_nprate${nprateArray[outeridx]}_curvSens${curv0Array[outeridx]}_wasp${waspArray[outeridx]} \
-        --reaction-rate-on-np 1.0 --curv-sens ${curv0Array[outeridx]} --WASP-rate ${waspArray[outeridx]}
+        --reaction-rate-on-np 1.0 --curv-sens ${curv0Array[outeridx]} --WASP-rate ${waspArray[outeridx]} --alt-yap-diffusion
         sleep 30
     done
 done
@@ -45,7 +45,7 @@ do
         python3 main.py --ntasks 1 --submit-tscc mechanotransduction \
         --mesh-folder /root/scratch/meshes/nanopillars_finalCalcCoarse/nanopillars_h${heightArray[idx]}_p${pitchArray[idx]}_r${radiusArray[idx]}_cellRad${cellRadArray[idx]} \
         --time-step 0.01 --e-val ${EModArray[idx]} --WASP-rate ${waspArray[outeridx]} \
-        --outdir /root/scratch/results_nanopillars_withWASP/nanopillars_h${heightArray[idx]}_p${pitchArray[idx]}_r${radiusArray[idx]}_cellRad${cellRadArray[idx]}_wasp${waspArray[outeridx]}
+        --outdir /root/scratch/results_nanopillars_withWASP/nanopillars_h${heightArray[idx]}_p${pitchArray[idx]}_r${radiusArray[idx]}_cellRad${cellRadArray[idx]}_wasp${waspArray[outeridx]} --alt-yap-diffusion
         sleep 30
     done
 done

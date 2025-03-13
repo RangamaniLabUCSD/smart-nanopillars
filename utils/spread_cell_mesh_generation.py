@@ -693,7 +693,7 @@ def get_u_nuc(zOffset, zMax, nucScaleFactor, nuc_compression, nanopillars):
 
     from smart import mesh_tools
     mesh_ellipsoid, mf2, mf3 = mesh_tools.create_ellipsoids(outerRad=[aInner,aInner,bInner], innerRad=[0,0,0], 
-                                                hEdge=0.1, hInnerEdge=0.5)
+                                                hEdge=0.05, hInnerEdge=0.5)
     
     mesh_bound = d.create_meshview(mf2, 10)
     V_full = d.FunctionSpace(mesh_ellipsoid, d.VectorElement("P", mesh_ellipsoid.ufl_cell(), degree = 1, dim = 3))
@@ -1172,8 +1172,8 @@ def calc_stretch_NP(x,y,zDef,
                 uzx += -2*(uRef*dxCur*drCur/(rlocal*0.2**2)) * sigma1
                 uzy += -2*(uRef*dyCur*drCur/(rlocal*0.2**2)) * sigma1
                 uzz += -sigma1
-    stretch_val = ((1+uzz)/N)*np.sqrt((x/(a**2) + z*uzx/(b**2 * (1+uzz)))**2 +
-                                      (y/(a**2) + z*uzy/(b**2 * (1+uzz)))**2 +
+    stretch_val = ((1+uzz)/N)*np.sqrt((x/(a**2) - z*uzx/(b**2 * (1+uzz)))**2 +
+                                      (y/(a**2) - z*uzy/(b**2 * (1+uzz)))**2 +
                                       (z/(b**2 * (1+uzz)))**2)
 
     return stretch_val

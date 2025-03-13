@@ -130,6 +130,7 @@ def mechanotransduction_example(
     a0_npc: float = 0.0,
     nuc_compression: float = 0.0,
     WASP_rate: float = 0.0,
+    alt_yap_diffusion: bool = False,
     **kwargs,
 ):
     args = [
@@ -154,6 +155,9 @@ def mechanotransduction_example(
         "--WASP-rate",
         WASP_rate,
     ]
+
+    if alt_yap_diffusion:
+        args.append("--alt-yap-diffusion")
 
     args.extend(["--outdir", Path(outdir).as_posix()])
 
@@ -185,6 +189,7 @@ def mechanotransduction_example_nuc_only(
     pore_rate: float = 10.0,
     transport_rate: float = 10.0,
     transport_ratio: float = 1.0,
+    alt_yap_diffusion: bool = False,
     **kwargs,
 ):
     args = [
@@ -209,6 +214,9 @@ def mechanotransduction_example_nuc_only(
         "--transport-ratio",
         transport_ratio
     ]
+
+    if alt_yap_diffusion:
+        args.append("--alt-yap-diffusion")
 
     args.extend(["--outdir", Path(outdir).as_posix()])
 

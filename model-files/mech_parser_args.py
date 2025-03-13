@@ -16,6 +16,7 @@ def add_mechanotransduction_arguments(parser: argparse.ArgumentParser) -> None:
     #                (0 - no gradient, 1 - ranges from max at bottom to 0 at top), total NPC number is conserved.  (float)
     #   - a0-npc: stretch sensitivity parameter for NPCs (float)
     #   - WASP-rate: rate of N-WASP mediated curvature-sensitive actin assembly at substrate (float)
+    #   - alt-yap-diffusion: test effects of different yap diffusion rates in nucleus vs cytosol
     parser.add_argument(
         "--mesh-folder",
         type=Path,
@@ -70,6 +71,11 @@ def add_mechanotransduction_arguments(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=0.01,
     )
+    parser.add_argument(
+        "--alt-yap-diffusion",
+        action="store_true",
+        default=False,
+    )
 
 def add_mechanotransduction_nucOnly_arguments(parser: argparse.ArgumentParser) -> None:
     # List of mechanotransduction_nucOnly arguments:
@@ -85,6 +91,7 @@ def add_mechanotransduction_nucOnly_arguments(parser: argparse.ArgumentParser) -
     #   - pore-rate: characteristic time for pore opening in s (float)
     #   - transport-rate: krupture (float)
     #   - transport-ratio: ratio between kin_rupture and kout_rupture (upsilon in model) (float)
+    #   - alt-yap-diffusion: test effects of different yap diffusion rates in nucleus vs cytosol
     parser.add_argument(
         "--mesh-folder",
         type=Path,
@@ -138,6 +145,11 @@ def add_mechanotransduction_nucOnly_arguments(parser: argparse.ArgumentParser) -
         "--transport-ratio",
         type=float,
         default=1.0,
+    )
+    parser.add_argument(
+        "--alt-yap-diffusion",
+        action="store_true",
+        default=False,
     )
 
 
